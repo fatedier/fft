@@ -1,0 +1,17 @@
+# github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb
+github.com/fatedier/beego/logs
+# github.com/fatedier/golib v0.2.0
+github.com/fatedier/golib/msg/json
+github.com/fatedier/golib/io
+github.com/fatedier/golib/crypto
+github.com/fatedier/golib/pool
+# github.com/golang/snappy v0.0.1
+github.com/golang/snappy
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/spf13/cobra v0.0.3
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.3
+github.com/spf13/pflag
+# golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
+golang.org/x/crypto/pbkdf2
