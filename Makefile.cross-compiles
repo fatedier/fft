@@ -1,0 +1,41 @@
+export PATH := $(GOPATH)/bin:$(PATH)
+LDFLAGS := -s -w
+
+all: build
+
+build: app
+
+app:
+	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fft_darwin_amd64 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fftw_darwin_amd64 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./ffts_darwin_amd64 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fft_freebsd_amd64 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fftw_freebsd_amd64 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./ffts_freebsd_amd64 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$(LDFLAGS)" -o ./fft_linux_386 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_386 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=386 go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_386 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fft_linux_amd64 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_amd64 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_amd64 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags "$(LDFLAGS)" -o ./fft_linux_arm ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_arm ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_arm ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o ./fft_linux_arm64 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_arm64 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_arm64 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fft_windows_amd64.exe ./cmd/fft
+	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./fftw_windows_amd64.exe ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o ./ffts_windows_amd64.exe ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -ldflags "$(LDFLAGS)" -o ./fft_linux_mips64 ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_mips64 ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64 go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_mips64 ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -ldflags "$(LDFLAGS)" -o ./fft_linux_mips64le ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_mips64le ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips64le go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_mips64le ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./fft_linux_mips ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_mips ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_mips ./cmd/ffts
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./fft_linux_mipsle ./cmd/fft
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./fftw_linux_mipsle ./cmd/fftw
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags "$(LDFLAGS)" -o ./ffts_linux_mipsle ./cmd/ffts
