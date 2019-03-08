@@ -11,15 +11,17 @@ type SendConn struct {
 	id       string
 	conn     net.Conn
 	filename string
+	fsize    int64
 
 	recvConnCh chan *RecvConn
 }
 
-func NewSendConn(id string, conn net.Conn, filename string) *SendConn {
+func NewSendConn(id string, conn net.Conn, filename string, fsize int64) *SendConn {
 	return &SendConn{
 		id:         id,
 		conn:       conn,
 		filename:   filename,
+		fsize:      fsize,
 		recvConnCh: make(chan *RecvConn),
 	}
 }
@@ -71,7 +73,7 @@ func (mc *MatchController) DealSendConn(sc *SendConn, timeout time.Duration) err
 	return nil
 }
 
-func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, err error) {
+func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, fsize int64, err error) {
 	mc.mu.Lock()
 	sc, ok := mc.senders[rc.id]
 	if ok {
@@ -84,6 +86,7 @@ func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, err erro
 		return
 	}
 	filename = sc.filename
+	fsize = sc.fsize
 
 	select {
 	case sc.recvConnCh <- rc:

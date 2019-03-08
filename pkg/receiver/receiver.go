@@ -12,14 +12,14 @@ import (
 type Receiver struct {
 	fileID      uint32
 	nextFrameID uint32
-	dst         io.WriteCloser
+	dst         io.Writer
 	frames      []*stream.Frame
 	notifyCh    chan struct{}
 
 	mu sync.RWMutex
 }
 
-func NewReceiver(fileID uint32, dst io.WriteCloser) *Receiver {
+func NewReceiver(fileID uint32, dst io.Writer) *Receiver {
 	return &Receiver{
 		fileID:      fileID,
 		nextFrameID: 0,
@@ -79,7 +79,6 @@ func (r *Receiver) Run() {
 		}
 
 		if finished {
-			r.dst.Close()
 			break
 		}
 	}

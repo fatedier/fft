@@ -7,9 +7,12 @@ import (
 	"sync"
 	"time"
 
+	fio "github.com/fatedier/fft/pkg/io"
 	"github.com/fatedier/fft/pkg/msg"
 	"github.com/fatedier/fft/pkg/sender"
 	"github.com/fatedier/fft/pkg/stream"
+
+	"github.com/cheggaaa/pb"
 )
 
 func (svc *Service) sendFile(id string, filePath string) error {
@@ -34,10 +37,12 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	}
 
 	msg.WriteMsg(conn, &msg.SendFile{
-		ID:   id,
-		Name: finfo.Name(),
+		ID:    id,
+		Name:  finfo.Name(),
+		Fsize: finfo.Size(),
 	})
 
+	fmt.Printf("Wait receiver...\n")
 	conn.SetReadDeadline(time.Now().Add(120 * time.Second))
 	raw, err := msg.ReadMsg(conn)
 	if err != nil {
@@ -63,7 +68,17 @@ func (svc *Service) sendFile(id string, filePath string) error {
 
 	var wait sync.WaitGroup
 	doneCh := make(chan struct{})
-	s := sender.NewSender(0, f)
+	count := finfo.Size()
+	bar := pb.New(int(count))
+	bar.ShowSpeed = true
+	bar.SetUnits(pb.U_BYTES)
+	bar.Start()
+
+	callback := func(n int) {
+		bar.Add(n)
+	}
+
+	s := sender.NewSender(0, fio.NewCallbackReader(f, callback))
 
 	for _, worker := range m.Workers {
 		wait.Add(1)
@@ -75,6 +90,7 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	s.Run()
 	close(doneCh)
 	wait.Wait()
+	bar.Finish()
 	return nil
 }
 
@@ -123,7 +139,6 @@ func newSendStream(doneCh chan struct{}, s *sender.Sender, id string, addr strin
 			log(debugMode, "[%s] new send file stream error: %s", addr, m.Error)
 			continue
 		}
-		fmt.Printf("connect to worker [%s] success\n", addr)
 
 		s.HandleStream(stream.NewFrameStream(conn))
 		break

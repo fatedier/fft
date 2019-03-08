@@ -10,13 +10,13 @@ import (
 
 type Sender struct {
 	id      uint32
-	src     io.ReadCloser
+	src     io.Reader
 	frameCh chan *stream.Frame
 
 	count uint32
 }
 
-func NewSender(id uint32, src io.ReadCloser) *Sender {
+func NewSender(id uint32, src io.Reader) *Sender {
 	return &Sender{
 		id:      id,
 		src:     src,
@@ -33,8 +33,6 @@ func (sender *Sender) HandleStream(s *stream.FrameStream) {
 }
 
 func (sender *Sender) Run() {
-	defer sender.src.Close()
-
 	count := 0
 	for {
 		buf := make([]byte, stream.FrameSize)

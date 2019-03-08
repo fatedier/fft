@@ -45,8 +45,9 @@ type RegisterWorkerResp struct {
 }
 
 type SendFile struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID    string `json:"id"`
+	Fsize int64  `json:"fsize"`
+	Name  string `json:"name"`
 }
 
 type SendFileResp struct {
@@ -61,6 +62,7 @@ type ReceiveFile struct {
 
 type ReceiveFileResp struct {
 	Name    string   `json:"name"`
+	Fsize   int64    `json:"fsize"`
 	Workers []string `json:"workers"`
 	Error   string   `json:"error"`
 }

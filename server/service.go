@@ -137,9 +137,9 @@ func (svc *Service) handleSendFile(conn net.Conn, m *msg.SendFile) error {
 	if m.ID == "" || m.Name == "" {
 		return fmt.Errorf("id and file name is required")
 	}
-	log.Debug("new SendFile id [%s], filename [%s]", m.ID, m.Name)
+	log.Debug("new SendFile id [%s], filename [%s] size [%d]", m.ID, m.Name, m.Fsize)
 
-	sc := NewSendConn(m.ID, conn, m.Name)
+	sc := NewSendConn(m.ID, conn, m.Name, m.Fsize)
 	err := svc.matchController.DealSendConn(sc, 60*time.Second)
 	if err != nil {
 		log.Warn("deal send conn error: %v", err)
@@ -160,7 +160,7 @@ func (svc *Service) handleRecvFile(conn net.Conn, m *msg.ReceiveFile) error {
 	log.Debug("new ReceiveFile id [%s]", m.ID)
 
 	rc := NewRecvConn(m.ID, conn)
-	filename, err := svc.matchController.DealRecvConn(rc)
+	filename, fsize, err := svc.matchController.DealRecvConn(rc)
 	if err != nil {
 		log.Warn("deal recv conn error: %v", err)
 		return err
@@ -168,6 +168,7 @@ func (svc *Service) handleRecvFile(conn net.Conn, m *msg.ReceiveFile) error {
 
 	msg.WriteMsg(conn, &msg.ReceiveFileResp{
 		Name:    filename,
+		Fsize:   fsize,
 		Workers: svc.workerGroup.GetAvailableWorkerAddrs(),
 	})
 	return nil

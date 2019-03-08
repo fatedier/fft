@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
+	fio "github.com/fatedier/fft/pkg/io"
 	"github.com/fatedier/fft/pkg/msg"
 	"github.com/fatedier/fft/pkg/receiver"
 	"github.com/fatedier/fft/pkg/stream"
+
+	"github.com/cheggaaa/pb"
 )
 
 func (svc *Service) recvFile(id string, filePath string) error {
@@ -47,7 +50,8 @@ func (svc *Service) recvFile(id string, filePath string) error {
 	if len(m.Workers) == 0 {
 		return fmt.Errorf("no available workers")
 	}
-	fmt.Printf("Recv filename: %s\n", m.Name)
+
+	fmt.Printf("Recv filename: %s Size: %s\n", m.Name, pb.Format(m.Fsize).String())
 	if svc.debugMode {
 		fmt.Printf("Workers: %v\n", m.Workers)
 	}
@@ -60,13 +64,26 @@ func (svc *Service) recvFile(id string, filePath string) error {
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	recv := receiver.NewReceiver(0, f)
+	count := m.Fsize
+	bar := pb.New(int(count))
+	bar.ShowSpeed = true
+	bar.SetUnits(pb.U_BYTES)
+
+	bar.Start()
+
+	callback := func(n int) {
+		bar.Add(n)
+	}
+
+	recv := receiver.NewReceiver(0, fio.NewCallbackWriter(f, callback))
 	for _, worker := range m.Workers {
 		addr := worker
 		go newRecvStream(recv, id, addr, svc.debugMode)
 	}
 	recv.Run()
+	bar.Finish()
 	return nil
 }
 
@@ -109,7 +126,6 @@ func newRecvStream(recv *receiver.Receiver, id string, addr string, debugMode bo
 			log(debugMode, "[%s] new recv file stream error: %s", addr, m.Error)
 			continue
 		}
-		fmt.Printf("connect to worker [%s] success\n", addr)
 
 		s := stream.NewFrameStream(conn)
 		for {
