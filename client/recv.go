@@ -51,7 +51,7 @@ func (svc *Service) recvFile(id string, filePath string) error {
 		return fmt.Errorf("no available workers")
 	}
 
-	fmt.Printf("Recv filename: %s Size: %s\n", m.Name, pb.Format(m.Fsize).String())
+	fmt.Printf("Recv filename: %s Size: %s\n", m.Name, pb.Format(m.Fsize).To(pb.U_BYTES).String())
 	if svc.debugMode {
 		fmt.Printf("Workers: %v\n", m.Workers)
 	}
