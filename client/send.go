@@ -67,80 +67,70 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	}
 
 	var wait sync.WaitGroup
-	doneCh := make(chan struct{})
 	count := finfo.Size()
 	bar := pb.New(int(count))
 	bar.ShowSpeed = true
 	bar.SetUnits(pb.U_BYTES)
-	bar.Start()
+	if !svc.debugMode {
+		bar.Start()
+	}
 
 	callback := func(n int) {
 		bar.Add(n)
 	}
 
-	s := sender.NewSender(0, fio.NewCallbackReader(f, callback))
+	s, err := sender.NewSender(0, fio.NewCallbackReader(f, callback), 5*1024, 500)
+	if err != nil {
+		return err
+	}
 
 	for _, worker := range m.Workers {
 		wait.Add(1)
 		go func(addr string) {
-			newSendStream(doneCh, s, m.ID, addr, svc.debugMode)
+			newSendStream(s, m.ID, addr, svc.debugMode)
 			wait.Done()
 		}(worker)
 	}
-	s.Run()
-	close(doneCh)
+	go s.Run()
 	wait.Wait()
-	bar.Finish()
+
+	if !svc.debugMode {
+		bar.Finish()
+	}
 	return nil
 }
 
-func newSendStream(doneCh chan struct{}, s *sender.Sender, id string, addr string, debugMode bool) {
-	first := true
-	for {
-		select {
-		case <-doneCh:
-			return
-		default:
-		}
-
-		if !first {
-			time.Sleep(3 * time.Second)
-		} else {
-			first = false
-		}
-
-		conn, err := net.Dial("tcp", addr)
-		if err != nil {
-			log(debugMode, "[%s] %v", addr, err)
-			continue
-		}
-
-		msg.WriteMsg(conn, &msg.NewSendFileStream{
-			ID: id,
-		})
-
-		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-		raw, err := msg.ReadMsg(conn)
-		if err != nil {
-			conn.Close()
-			log(debugMode, "[%s] %v", addr, err)
-			continue
-		}
-		conn.SetReadDeadline(time.Time{})
-		m, ok := raw.(*msg.NewSendFileStreamResp)
-		if !ok {
-			conn.Close()
-			log(debugMode, "[%s] read NewSendFileStreamResp format error", addr)
-			continue
-		}
-
-		if m.Error != "" {
-			conn.Close()
-			log(debugMode, "[%s] new send file stream error: %s", addr, m.Error)
-			continue
-		}
-
-		s.HandleStream(stream.NewFrameStream(conn))
-		break
+func newSendStream(s *sender.Sender, id string, addr string, debugMode bool) {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		log(debugMode, "[%s] %v", addr, err)
+		return
 	}
+
+	msg.WriteMsg(conn, &msg.NewSendFileStream{
+		ID: id,
+	})
+
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	raw, err := msg.ReadMsg(conn)
+	if err != nil {
+		conn.Close()
+		log(debugMode, "[%s] %v", addr, err)
+		return
+	}
+	conn.SetReadDeadline(time.Time{})
+	m, ok := raw.(*msg.NewSendFileStreamResp)
+	if !ok {
+		conn.Close()
+		log(debugMode, "[%s] read NewSendFileStreamResp format error", addr)
+		return
+	}
+
+	if m.Error != "" {
+		conn.Close()
+		log(debugMode, "[%s] new send file stream error: %s", addr, m.Error)
+		return
+	}
+
+	s.HandleStream(stream.NewFrameStream(conn))
 }
