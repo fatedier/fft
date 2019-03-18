@@ -8,25 +8,10 @@ import (
 	"net"
 )
 
-var (
-	FrameSize = 51200
-)
-
-type Frame struct {
-	Version uint8
-	FileID  uint32
-	FrameID uint32
-	Buf     []byte // if len(Buf) == 0 , is last frame
-}
-
-func NewFrame(fileID uint32, frameID uint32, buf []byte) *Frame {
-	return &Frame{
-		Version: 0,
-		FileID:  fileID,
-		FrameID: frameID,
-		Buf:     buf,
-	}
-}
+/*
+	Sender -> Frame -> Receiver
+	Sender <- Ack <- Receiver
+*/
 
 type FrameStream struct {
 	conn net.Conn
@@ -97,6 +82,37 @@ func (fs *FrameStream) ReadFrame() (*Frame, error) {
 		return nil, fmt.Errorf("error frame length")
 	}
 	return f, nil
+}
+
+func (fs *FrameStream) WriteAck(ack *Ack) error {
+	buffer := bytes.NewBuffer(nil)
+	binary.Write(buffer, binary.BigEndian, uint8(ack.Version))
+	binary.Write(buffer, binary.BigEndian, uint32(ack.FileID))
+	binary.Write(buffer, binary.BigEndian, uint32(ack.FrameID))
+	_, err := fs.conn.Write(buffer.Bytes())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (fs *FrameStream) ReadAck() (*Ack, error) {
+	ack := &Ack{}
+	err := binary.Read(fs.conn, binary.BigEndian, &ack.Version)
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Read(fs.conn, binary.BigEndian, &ack.FileID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = binary.Read(fs.conn, binary.BigEndian, &ack.FrameID)
+	if err != nil {
+		return nil, err
+	}
+	return ack, nil
 }
 
 func (fs *FrameStream) Close() error {
