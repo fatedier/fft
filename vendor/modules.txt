@@ -1,0 +1,26 @@
+# github.com/cheggaaa/pb v1.0.28
+github.com/cheggaaa/pb
+# github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb
+github.com/fatedier/beego/logs
+# github.com/fatedier/golib v0.1.1-0.20190318030453-e78944029985
+github.com/fatedier/golib/msg/json
+github.com/fatedier/golib/control/limit
+github.com/fatedier/golib/control/shutdown
+github.com/fatedier/golib/io
+github.com/fatedier/golib/errors
+github.com/fatedier/golib/crypto
+github.com/fatedier/golib/pool
+# github.com/golang/snappy v0.0.1
+github.com/golang/snappy
+# github.com/inconshreveable/mousetrap v1.0.0
+github.com/inconshreveable/mousetrap
+# github.com/mattn/go-runewidth v0.0.4
+github.com/mattn/go-runewidth
+# github.com/spf13/cobra v0.0.3
+github.com/spf13/cobra
+# github.com/spf13/pflag v1.0.3
+github.com/spf13/pflag
+# golang.org/x/crypto v0.0.0-20190228161510-8dd112bcdc25
+golang.org/x/crypto/pbkdf2
+# golang.org/x/sys v0.0.0-20190222072716-a9d3bda3a223
+golang.org/x/sys/unix

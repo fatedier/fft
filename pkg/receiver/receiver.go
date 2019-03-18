@@ -12,26 +12,39 @@ import (
 type Receiver struct {
 	fileID      uint32
 	nextFrameID uint32
-	dst         io.WriteCloser
+	dst         io.Writer
 	frames      []*stream.Frame
+	framesIDMap map[uint32]struct{}
 	notifyCh    chan struct{}
 
 	mu sync.RWMutex
 }
 
-func NewReceiver(fileID uint32, dst io.WriteCloser) *Receiver {
+func NewReceiver(fileID uint32, dst io.Writer) *Receiver {
 	return &Receiver{
 		fileID:      fileID,
 		nextFrameID: 0,
 		dst:         dst,
 		frames:      make([]*stream.Frame, 0),
+		framesIDMap: make(map[uint32]struct{}),
 		notifyCh:    make(chan struct{}, 1),
 	}
 }
 
 func (r *Receiver) RecvFrame(frame *stream.Frame) {
 	r.mu.Lock()
+	if frame.FrameID < r.nextFrameID {
+		r.mu.Unlock()
+		return
+	}
+
+	if _, ok := r.framesIDMap[frame.FrameID]; ok {
+		r.mu.Unlock()
+		return
+	}
+
 	r.frames = append(r.frames, frame)
+	r.framesIDMap[frame.FrameID] = struct{}{}
 	sort.Slice(r.frames, func(i, j int) bool {
 		return r.frames[i].FrameID < r.frames[j].FrameID
 	})
@@ -57,6 +70,7 @@ func (r *Receiver) Run() {
 		for i, frame := range r.frames {
 			if r.nextFrameID == frame.FrameID {
 				ii = i + 1
+				delete(r.framesIDMap, frame.FrameID)
 				// it's last frame
 				if len(frame.Buf) == 0 {
 					finished = true
@@ -79,7 +93,6 @@ func (r *Receiver) Run() {
 		}
 
 		if finished {
-			r.dst.Close()
 			break
 		}
 	}

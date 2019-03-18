@@ -8,31 +8,37 @@ import (
 )
 
 type SendConn struct {
-	id       string
-	conn     net.Conn
-	filename string
+	id         string
+	conn       net.Conn
+	filename   string
+	fsize      int64
+	cacheCount int64
 
 	recvConnCh chan *RecvConn
 }
 
-func NewSendConn(id string, conn net.Conn, filename string) *SendConn {
+func NewSendConn(id string, conn net.Conn, filename string, fsize int64, cacheCount int64) *SendConn {
 	return &SendConn{
 		id:         id,
 		conn:       conn,
 		filename:   filename,
+		fsize:      fsize,
+		cacheCount: cacheCount,
 		recvConnCh: make(chan *RecvConn),
 	}
 }
 
 type RecvConn struct {
-	id   string
-	conn net.Conn
+	id         string
+	conn       net.Conn
+	cacheCount int64
 }
 
-func NewRecvConn(id string, conn net.Conn) *RecvConn {
+func NewRecvConn(id string, conn net.Conn, cacheCount int64) *RecvConn {
 	return &RecvConn{
-		id:   id,
-		conn: conn,
+		id:         id,
+		conn:       conn,
+		cacheCount: cacheCount,
 	}
 }
 
@@ -49,29 +55,32 @@ func NewMatchController() *MatchController {
 }
 
 // block until there is a same ID recv conn or timeout
-func (mc *MatchController) DealSendConn(sc *SendConn, timeout time.Duration) error {
+func (mc *MatchController) DealSendConn(sc *SendConn, timeout time.Duration) (cacheCount int64, err error) {
 	mc.mu.Lock()
 	if _, ok := mc.senders[sc.id]; ok {
 		mc.mu.Unlock()
-		return fmt.Errorf("id is repeated")
+		err = fmt.Errorf("id is repeated")
+		return
 	}
 	mc.senders[sc.id] = sc
 	mc.mu.Unlock()
 
 	select {
-	case <-sc.recvConnCh:
+	case rc := <-sc.recvConnCh:
+		cacheCount = rc.cacheCount
 	case <-time.After(timeout):
 		mc.mu.Lock()
 		if tmp, ok := mc.senders[sc.id]; ok && tmp == sc {
 			delete(mc.senders, sc.id)
 		}
 		mc.mu.Unlock()
-		return fmt.Errorf("timeout waiting recv conn")
+		err = fmt.Errorf("timeout waiting recv conn")
+		return
 	}
-	return nil
+	return
 }
 
-func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, err error) {
+func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, fsize int64, cacheCount int64, err error) {
 	mc.mu.Lock()
 	sc, ok := mc.senders[rc.id]
 	if ok {
@@ -84,6 +93,8 @@ func (mc *MatchController) DealRecvConn(rc *RecvConn) (filename string, err erro
 		return
 	}
 	filename = sc.filename
+	fsize = sc.fsize
+	cacheCount = sc.cacheCount
 
 	select {
 	case sc.recvConnCh <- rc:

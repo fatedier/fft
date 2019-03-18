@@ -1,7 +1,13 @@
 package server
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"net"
 	"time"
 
@@ -28,6 +34,8 @@ type Service struct {
 	l               net.Listener
 	workerGroup     *WorkerGroup
 	matchController *MatchController
+
+	tlsConfig *tls.Config
 }
 
 func NewService(options Options) (*Service, error) {
@@ -51,6 +59,7 @@ func NewService(options Options) (*Service, error) {
 		l:               l,
 		workerGroup:     NewWorkerGroup(),
 		matchController: NewMatchController(),
+		tlsConfig:       generateTLSConfig(),
 	}, nil
 }
 
@@ -58,7 +67,7 @@ func (svc *Service) Run() error {
 	// Debug ========
 	go func() {
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			log.Info("worker addrs: %v", svc.workerGroup.GetAvailableWorkerAddrs())
 		}
 	}()
@@ -69,6 +78,7 @@ func (svc *Service) Run() error {
 		if err != nil {
 			return err
 		}
+		conn = tls.Server(conn, svc.tlsConfig)
 
 		go svc.handleConn(conn)
 	}
@@ -137,18 +147,19 @@ func (svc *Service) handleSendFile(conn net.Conn, m *msg.SendFile) error {
 	if m.ID == "" || m.Name == "" {
 		return fmt.Errorf("id and file name is required")
 	}
-	log.Debug("new SendFile id [%s], filename [%s]", m.ID, m.Name)
+	log.Debug("new SendFile id [%s], filename [%s] size [%d]", m.ID, m.Name, m.Fsize)
 
-	sc := NewSendConn(m.ID, conn, m.Name)
-	err := svc.matchController.DealSendConn(sc, 60*time.Second)
+	sc := NewSendConn(m.ID, conn, m.Name, m.Fsize, m.CacheCount)
+	cacheCount, err := svc.matchController.DealSendConn(sc, 120*time.Second)
 	if err != nil {
 		log.Warn("deal send conn error: %v", err)
 		return err
 	}
 
 	msg.WriteMsg(conn, &msg.SendFileResp{
-		ID:      m.ID,
-		Workers: svc.workerGroup.GetAvailableWorkerAddrs(),
+		ID:         m.ID,
+		Workers:    svc.workerGroup.GetAvailableWorkerAddrs(),
+		CacheCount: cacheCount,
 	})
 	return nil
 }
@@ -159,16 +170,39 @@ func (svc *Service) handleRecvFile(conn net.Conn, m *msg.ReceiveFile) error {
 	}
 	log.Debug("new ReceiveFile id [%s]", m.ID)
 
-	rc := NewRecvConn(m.ID, conn)
-	filename, err := svc.matchController.DealRecvConn(rc)
+	rc := NewRecvConn(m.ID, conn, m.CacheCount)
+	filename, fsize, cacheCount, err := svc.matchController.DealRecvConn(rc)
 	if err != nil {
 		log.Warn("deal recv conn error: %v", err)
 		return err
 	}
 
 	msg.WriteMsg(conn, &msg.ReceiveFileResp{
-		Name:    filename,
-		Workers: svc.workerGroup.GetAvailableWorkerAddrs(),
+		Name:       filename,
+		Fsize:      fsize,
+		Workers:    svc.workerGroup.GetAvailableWorkerAddrs(),
+		CacheCount: cacheCount,
 	})
 	return nil
+}
+
+// Setup a bare-bones TLS config for the server
+func generateTLSConfig() *tls.Config {
+	key, err := rsa.GenerateKey(rand.Reader, 1024)
+	if err != nil {
+		panic(err)
+	}
+	template := x509.Certificate{SerialNumber: big.NewInt(1)}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		panic(err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+
+	tlsCert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		panic(err)
+	}
+	return &tls.Config{Certificates: []tls.Certificate{tlsCert}}
 }
