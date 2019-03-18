@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"time"
@@ -72,9 +73,11 @@ func (r *Register) RunKeepAlive(conn net.Conn) error {
 				time.Sleep(10 * time.Second)
 				continue
 			}
+			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 
 			err = r.Register(conn)
 			if err != nil {
+				conn.Close()
 				time.Sleep(10 * time.Second)
 				continue
 			}

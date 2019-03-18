@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
@@ -27,6 +28,7 @@ func (svc *Service) recvFile(id string, filePath string) error {
 	if err != nil {
 		return err
 	}
+	conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 	defer conn.Close()
 
 	msg.WriteMsg(conn, &msg.ReceiveFile{
@@ -123,6 +125,7 @@ func newRecvStream(recv *receiver.Receiver, id string, addr string, debugMode bo
 		log(debugMode, "[%s] %v", addr, err)
 		return
 	}
+	conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 
 	msg.WriteMsg(conn, &msg.NewReceiveFileStream{
 		ID: id,

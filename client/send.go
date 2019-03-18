@@ -1,6 +1,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
@@ -20,6 +21,7 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	if err != nil {
 		return err
 	}
+	conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 	defer conn.Close()
 
 	f, err := os.Open(filePath)
@@ -108,6 +110,7 @@ func newSendStream(s *sender.Sender, id string, addr string, debugMode bool) {
 		log(debugMode, "[%s] %v", addr, err)
 		return
 	}
+	conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 
 	msg.WriteMsg(conn, &msg.NewSendFileStream{
 		ID: id,

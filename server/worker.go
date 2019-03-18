@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -52,6 +53,8 @@ func (w *Worker) DetectPublicAddr() error {
 		log.Warn("dial worker public address error: %v", err)
 		return ErrPublicAddr
 	}
+	detectConn = tls.Client(detectConn, &tls.Config{InsecureSkipVerify: true})
+	defer detectConn.Close()
 
 	msg.WriteMsg(detectConn, &msg.Ping{})
 
@@ -64,7 +67,6 @@ func (w *Worker) DetectPublicAddr() error {
 	if _, ok := m.(*msg.Pong); !ok {
 		return ErrPublicAddr
 	}
-	detectConn.Close()
 
 	w.publicAddr = detectAddr
 	return nil
