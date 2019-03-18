@@ -4,8 +4,6 @@ github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSs
 github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb/go.mod h1:wx3gB6dbIfBRcucp94PI9Bt3I0F2c/MyNEWuhzpWiwk=
 github.com/fatedier/golib v0.1.1-0.20190318030453-e78944029985 h1:zUnj4SOsgbLMVCfL+yTuR7vO/NbVveck2qKYw2i1eZo=
 github.com/fatedier/golib v0.1.1-0.20190318030453-e78944029985/go.mod h1:e2NPpBGUFsHDjXrfP1B5aK3S0+yUeVxgqfc3go3KNj0=
-github.com/fatedier/golib v0.2.0 h1:8BxiUcjleBlXBYlTNUllD8KZZHaFU/NP/vP0Yu1Fkpg=
-github.com/fatedier/golib v0.2.0/go.mod h1:e2NPpBGUFsHDjXrfP1B5aK3S0+yUeVxgqfc3go3KNj0=
 github.com/fatih/color v1.7.0 h1:DkWD4oS2D8LGGgTQ6IvwJJXSL5Vp2ffcQg58nFV38Ys=
 github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5KwzbycvMj4=
 github.com/golang/snappy v0.0.1 h1:Qgr9rKW7uDUkrbSmQeiDsGa8SjGyCOGtuasMWwvp2P4=
