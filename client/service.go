@@ -8,6 +8,8 @@ type Options struct {
 	ServerAddr string
 	ID         string
 	SendFile   string
+	FrameSize  int
+	CacheCount int
 	RecvFile   string
 	DebugMode  bool
 }
@@ -16,12 +18,24 @@ func (op *Options) Check() error {
 	if op.SendFile == "" && op.RecvFile == "" {
 		return fmt.Errorf("send_file or recv_file is required")
 	}
+
+	if op.SendFile != "" {
+		if op.FrameSize <= 0 {
+			return fmt.Errorf("frame_size should be greater than 0")
+		}
+	}
+
+	if op.CacheCount <= 0 {
+		return fmt.Errorf("cache_count should be greater than 0")
+	}
 	return nil
 }
 
 type Service struct {
 	debugMode  bool
 	serverAddr string
+	frameSize  int
+	cacheCount int
 
 	runHandler func() error
 }
@@ -34,6 +48,8 @@ func NewService(options Options) (*Service, error) {
 	svc := &Service{
 		debugMode:  options.DebugMode,
 		serverAddr: options.ServerAddr,
+		frameSize:  options.FrameSize,
+		cacheCount: options.CacheCount,
 	}
 
 	if options.SendFile != "" {

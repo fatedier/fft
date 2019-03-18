@@ -37,9 +37,10 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	}
 
 	msg.WriteMsg(conn, &msg.SendFile{
-		ID:    id,
-		Name:  finfo.Name(),
-		Fsize: finfo.Size(),
+		ID:         id,
+		Name:       finfo.Name(),
+		Fsize:      finfo.Size(),
+		CacheCount: int64(svc.cacheCount),
 	})
 
 	fmt.Printf("Wait receiver...\n")
@@ -61,6 +62,7 @@ func (svc *Service) sendFile(id string, filePath string) error {
 	if len(m.Workers) == 0 {
 		return fmt.Errorf("no available workers")
 	}
+	svc.cacheCount = int(m.CacheCount)
 	fmt.Printf("ID: %s\n", m.ID)
 	if svc.debugMode {
 		fmt.Printf("Workers: %v\n", m.Workers)
@@ -79,7 +81,7 @@ func (svc *Service) sendFile(id string, filePath string) error {
 		bar.Add(n)
 	}
 
-	s, err := sender.NewSender(0, fio.NewCallbackReader(f, callback), 5*1024, 500)
+	s, err := sender.NewSender(0, fio.NewCallbackReader(f, callback), svc.frameSize, svc.cacheCount)
 	if err != nil {
 		return err
 	}

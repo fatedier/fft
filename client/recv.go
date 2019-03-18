@@ -30,7 +30,8 @@ func (svc *Service) recvFile(id string, filePath string) error {
 	defer conn.Close()
 
 	msg.WriteMsg(conn, &msg.ReceiveFile{
-		ID: id,
+		ID:         id,
+		CacheCount: int64(svc.cacheCount),
 	})
 
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))

@@ -58,7 +58,7 @@ func (svc *Service) Run() error {
 	// Debug ========
 	go func() {
 		for {
-			time.Sleep(5 * time.Second)
+			time.Sleep(10 * time.Second)
 			log.Info("worker addrs: %v", svc.workerGroup.GetAvailableWorkerAddrs())
 		}
 	}()
@@ -139,16 +139,17 @@ func (svc *Service) handleSendFile(conn net.Conn, m *msg.SendFile) error {
 	}
 	log.Debug("new SendFile id [%s], filename [%s] size [%d]", m.ID, m.Name, m.Fsize)
 
-	sc := NewSendConn(m.ID, conn, m.Name, m.Fsize)
-	err := svc.matchController.DealSendConn(sc, 60*time.Second)
+	sc := NewSendConn(m.ID, conn, m.Name, m.Fsize, m.CacheCount)
+	cacheCount, err := svc.matchController.DealSendConn(sc, 120*time.Second)
 	if err != nil {
 		log.Warn("deal send conn error: %v", err)
 		return err
 	}
 
 	msg.WriteMsg(conn, &msg.SendFileResp{
-		ID:      m.ID,
-		Workers: svc.workerGroup.GetAvailableWorkerAddrs(),
+		ID:         m.ID,
+		Workers:    svc.workerGroup.GetAvailableWorkerAddrs(),
+		CacheCount: cacheCount,
 	})
 	return nil
 }
@@ -159,17 +160,18 @@ func (svc *Service) handleRecvFile(conn net.Conn, m *msg.ReceiveFile) error {
 	}
 	log.Debug("new ReceiveFile id [%s]", m.ID)
 
-	rc := NewRecvConn(m.ID, conn)
-	filename, fsize, err := svc.matchController.DealRecvConn(rc)
+	rc := NewRecvConn(m.ID, conn, m.CacheCount)
+	filename, fsize, cacheCount, err := svc.matchController.DealRecvConn(rc)
 	if err != nil {
 		log.Warn("deal recv conn error: %v", err)
 		return err
 	}
 
 	msg.WriteMsg(conn, &msg.ReceiveFileResp{
-		Name:    filename,
-		Fsize:   fsize,
-		Workers: svc.workerGroup.GetAvailableWorkerAddrs(),
+		Name:       filename,
+		Fsize:      fsize,
+		Workers:    svc.workerGroup.GetAvailableWorkerAddrs(),
+		CacheCount: cacheCount,
 	})
 	return nil
 }

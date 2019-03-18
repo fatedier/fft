@@ -20,6 +20,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&options.ServerAddr, "server_addr", "s", version.DefaultServerAddr(), "remote fft server address")
 	rootCmd.PersistentFlags().StringVarP(&options.ID, "id", "i", "", "specify a special id to transfer file")
 	rootCmd.PersistentFlags().StringVarP(&options.SendFile, "send_file", "l", "", "specify which file to send to another client")
+	rootCmd.PersistentFlags().IntVarP(&options.FrameSize, "frame_size", "n", 5*1024, "each frame size, it's only for sender, default(5*1024 B)")
+	rootCmd.PersistentFlags().IntVarP(&options.CacheCount, "cache_count", "c", 512, "how many frames be cached, it will be set to the min value between sender and receiver")
 	rootCmd.PersistentFlags().StringVarP(&options.RecvFile, "recv_file", "t", "", "specify local file path to store received file")
 	rootCmd.PersistentFlags().BoolVarP(&options.DebugMode, "debug", "g", false, "print more debug info")
 }

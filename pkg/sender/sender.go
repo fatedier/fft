@@ -86,7 +86,11 @@ func (sender *Sender) HandleStream(s *stream.FrameStream) {
 	sender.mu.Unlock()
 
 	id := atomic.AddUint32(&sender.count, 1)
-	tr := NewTransfer(int(id), 100, s, sender.frameCh, sender.ackCh)
+	trBufferCount := sender.maxBufferCount / 2
+	if trBufferCount <= 0 {
+		trBufferCount = 1
+	}
+	tr := NewTransfer(int(id), trBufferCount, s, sender.frameCh, sender.ackCh)
 
 	// block until transfer exit
 	noAckFrames := tr.Run()
