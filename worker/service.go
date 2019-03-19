@@ -20,6 +20,7 @@ type Options struct {
 	ServerAddr     string
 	BindAddr       string
 	AdvicePublicIP string
+	RateKB         int // xx KB/s
 
 	LogFile    string
 	LogLevel   string
@@ -29,6 +30,9 @@ type Options struct {
 func (op *Options) Check() error {
 	if op.LogMaxDays <= 0 {
 		op.LogMaxDays = 3
+	}
+	if op.RateKB < 50 {
+		return fmt.Errorf("rate should greater than 50KB")
 	}
 	return nil
 }
@@ -64,7 +68,7 @@ func NewService(options Options) (*Service, error) {
 		advicePublicIP: options.AdvicePublicIP,
 
 		l:         l,
-		matchCtl:  NewMatchController(),
+		matchCtl:  NewMatchController(options.RateKB * 1024),
 		tlsConfig: generateTLSConfig(),
 	}, nil
 }

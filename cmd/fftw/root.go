@@ -20,6 +20,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&options.ServerAddr, "server_addr", "s", version.DefaultServerAddr(), "remote fft server address")
 	rootCmd.PersistentFlags().StringVarP(&options.BindAddr, "bind_addr", "b", "0.0.0.0:7778", "bind address")
 	rootCmd.PersistentFlags().StringVarP(&options.AdvicePublicIP, "advice_public_ip", "p", "", "fft worker's advice public ip")
+	rootCmd.PersistentFlags().IntVarP(&options.RateKB, "rate", "", 2048, "max bandwidth fftw will provide, unit is KB, default is 2048KB and min value is 50KB")
 
 	rootCmd.PersistentFlags().StringVarP(&options.LogFile, "log_file", "", "console", "log file path")
 	rootCmd.PersistentFlags().StringVarP(&options.LogLevel, "log_level", "", "info", "log level")
