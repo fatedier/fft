@@ -1,3 +1,7 @@
+### v0.2.0
+
+- Support bandwidth limit on fftw.
+
 ### v0.1.0
 
 - Support upload and download process bar.
