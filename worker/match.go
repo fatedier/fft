@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	rateio "github.com/fatedier/fft/pkg/io"
+	fio "github.com/fatedier/fft/pkg/io"
 	"github.com/fatedier/fft/pkg/log"
 	"github.com/fatedier/fft/pkg/msg"
 
@@ -37,16 +37,18 @@ type MatchController struct {
 	conns map[string]*TransferConn
 
 	rateLimit *rate.Limiter
+	statFunc  func(int)
 	mu        sync.Mutex
 }
 
-func NewMatchController(rateByte int) *MatchController {
+func NewMatchController(rateByte int, statFunc func(int)) *MatchController {
 	if rateByte < 50*1024 {
 		rateByte = 50 * 1024
 	}
 	return &MatchController{
 		conns:     make(map[string]*TransferConn),
 		rateLimit: rate.NewLimiter(rate.Limit(float64(rateByte)), 16*1024),
+		statFunc:  statFunc,
 	}
 }
 
@@ -66,12 +68,14 @@ func (mc *MatchController) DealTransferConn(tc *TransferConn, timeout time.Durat
 		case pairConn := <-tc.pairConnCh:
 			var sender, receiver io.ReadWriteCloser
 			if tc.isSender {
-				sender = gio.WrapReadWriteCloser(rateio.NewRateReader(tc.conn, mc.rateLimit), tc.conn, func() error {
+				wrapReader := fio.NewCallbackReader(fio.NewRateReader(tc.conn, mc.rateLimit), mc.statFunc)
+				sender = gio.WrapReadWriteCloser(wrapReader, tc.conn, func() error {
 					return tc.conn.Close()
 				})
 				receiver = pairConn.conn
 			} else {
-				sender = gio.WrapReadWriteCloser(rateio.NewRateReader(pairConn.conn, mc.rateLimit), pairConn.conn, func() error {
+				wrapReader := fio.NewCallbackReader(fio.NewRateReader(pairConn.conn, mc.rateLimit), mc.statFunc)
+				sender = gio.WrapReadWriteCloser(wrapReader, pairConn.conn, func() error {
 					return pairConn.conn.Close()
 				})
 				receiver = tc.conn
