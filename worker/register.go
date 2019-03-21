@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/fatedier/fft/pkg/log"
@@ -15,30 +16,42 @@ type Register struct {
 	port           int64
 	advicePublicIP string
 	serverAddr     string
+	conn           net.Conn
+
+	closed bool
+	mu     sync.Mutex
 }
 
-func NewRegister(port int64, advicePublicIP string, serverAddr string) *Register {
+func NewRegister(port int64, advicePublicIP string, serverAddr string) (*Register, error) {
+	conn, err := net.Dial("tcp", serverAddr)
+	if err != nil {
+		return nil, err
+	}
+	conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
+
 	return &Register{
 		port:           port,
 		advicePublicIP: advicePublicIP,
 		serverAddr:     serverAddr,
-	}
+		conn:           conn,
+		closed:         false,
+	}, nil
 }
 
-func (r *Register) Register(conn net.Conn) error {
-	msg.WriteMsg(conn, &msg.RegisterWorker{
+func (r *Register) Register() error {
+	msg.WriteMsg(r.conn, &msg.RegisterWorker{
 		Version:  version.Full(),
 		PublicIP: r.advicePublicIP,
 		BindPort: r.port,
 	})
 
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	m, err := msg.ReadMsg(conn)
+	r.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	m, err := msg.ReadMsg(r.conn)
 	if err != nil {
 		log.Warn("read RegisterWorkerResp error: %v", err)
 		return err
 	}
-	conn.SetReadDeadline(time.Time{})
+	r.conn.SetReadDeadline(time.Time{})
 
 	resp, ok := m.(*msg.RegisterWorkerResp)
 	if !ok {
@@ -51,16 +64,21 @@ func (r *Register) Register(conn net.Conn) error {
 	return nil
 }
 
-func (r *Register) RunKeepAlive(conn net.Conn) error {
+func (r *Register) RunKeepAlive() {
 	var err error
 	for {
 		// send ping and read pong
 		for {
-			msg.WriteMsg(conn, &msg.Ping{})
+			// in case it is closed before
+			if r.conn == nil {
+				break
+			}
 
-			_, err = msg.ReadMsg(conn)
+			msg.WriteMsg(r.conn, &msg.Ping{})
+
+			_, err = msg.ReadMsg(r.conn)
 			if err != nil {
-				conn.Close()
+				r.conn.Close()
 				break
 			}
 
@@ -68,16 +86,33 @@ func (r *Register) RunKeepAlive(conn net.Conn) error {
 		}
 
 		for {
-			conn, err = net.Dial("tcp", r.serverAddr)
+			r.mu.Lock()
+			closed := r.closed
+			r.mu.Unlock()
+			if r.closed {
+				return
+			}
+
+			conn, err := net.Dial("tcp", r.serverAddr)
 			if err != nil {
 				time.Sleep(10 * time.Second)
 				continue
 			}
 			conn = tls.Client(conn, &tls.Config{InsecureSkipVerify: true})
 
-			err = r.Register(conn)
-			if err != nil {
+			r.mu.Lock()
+			closed = r.closed
+			if closed {
 				conn.Close()
+				r.mu.Unlock()
+				return
+			}
+			r.conn = conn
+			r.mu.Unlock()
+
+			err = r.Register()
+			if err != nil {
+				r.conn.Close()
 				time.Sleep(10 * time.Second)
 				continue
 			}
@@ -85,5 +120,17 @@ func (r *Register) RunKeepAlive(conn net.Conn) error {
 			break
 		}
 	}
-	return nil
+}
+
+func (r *Register) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.closed = true
+	r.conn.Close()
+}
+
+// Reset can be only called after Close
+func (r *Register) Reset() {
+	r.closed = false
+	r.conn = nil
 }

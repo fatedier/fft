@@ -1,3 +1,8 @@
+### v0.2.0
+
+- Support bandwidth limit on fftw.
+- Support limit the max traffic fftw can used every day.
+
 ### v0.1.0
 
 - Support upload and download process bar.
