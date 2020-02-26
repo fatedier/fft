@@ -20,6 +20,11 @@ func NewRateReader(r io.Reader, limiter *rate.Limiter) *RateReader {
 }
 
 func (rr *RateReader) Read(p []byte) (n int, err error) {
+	burst := rr.limiter.Burst()
+	if len(p) > burst {
+		p = p[:burst]
+	}
+
 	n, err = rr.underlying.Read(p)
 	if err != nil {
 		return
