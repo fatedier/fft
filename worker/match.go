@@ -47,7 +47,7 @@ func NewMatchController(rateByte int, statFunc func(int)) *MatchController {
 	}
 	return &MatchController{
 		conns:     make(map[string]*TransferConn),
-		rateLimit: rate.NewLimiter(rate.Limit(float64(rateByte)), 16*1024),
+		rateLimit: rate.NewLimiter(rate.Limit(float64(rateByte)), 32*1024),
 		statFunc:  statFunc,
 	}
 }
