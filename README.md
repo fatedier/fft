@@ -1,49 +1,87 @@
 # fft
 
-fft 是一个分布式的文件传输工具，可以同时利用多个中转节点来并行传输文件。
+`fft` is a distributed file transfer tool designed to accelerate the transfer of large files. It achieves this by utilizing multiple relay nodes in parallel, effectively overcoming the bandwidth limitations of a single server.
 
-## 目的
+## Purpose
 
-在两个内网机器之间稳定传输大文件往往需要较高带宽的中转服务器才能够达到两端上传或下载的最大速度，而带宽成本非常高。
+Transferring large files reliably between two machines, especially when they are behind NATs or firewalls, often requires a relay server with high bandwidth. However, high-bandwidth servers can be expensive.
 
-有大量低带宽的服务器 (1MB) 长期处于闲置状态，资源没有有效利用。
+On the other hand, there are many low-bandwidth servers (e.g., 1MBps) that often sit idle, their resources underutilized.
 
-fft 的目的是充分利用这样的服务器的闲置带宽资源，使发送方和接收方可以同时通过多个中转服务器来传输文件，不再受限于单个服务器的网络带宽上限。
+The goal of `fft` is to leverage these underutilized low-bandwidth servers. By enabling senders and receivers to transfer files through multiple relay nodes simultaneously, `fft` aggregates the bandwidth of these nodes, allowing for faster transfer speeds than would be possible with a single relay. This approach avoids the bottleneck of a single server's bandwidth capacity.
 
-fft 专注于文件传输这一单向大流量的服务，待该项目试验成熟后，会运用于内网穿透([frp](https://github.com/fatedier/frp))中，使内网穿透的服务也不再受限于中转服务器的带宽。
+`fft` focuses specifically on the task of file transfer, which typically involves a unidirectional flow of a large amount of data. Once this project matures, the plan is to integrate its capabilities into [frp](https://github.com/fatedier/frp), a fast reverse proxy, to enhance its services by removing bandwidth limitations imposed by a single relay server.
 
-## 开发状态
+## Architecture
 
-目前处于早期开发阶段，功能不完善，仅用于测试使用。
+The `fft` system consists of three main components:
 
-master 分支用于发布稳定版本，dev 分支用于开发，您可以尝试下载最新的 release 版本进行测试。
+*   **`ffts` (Server Control Node):** This is the central coordinator of the system.
+    *   It manages the registration of `fftw` worker nodes.
+    *   It facilitates the matching of sending and receiving `fft` clients.
+    *   When a sender initiates a file transfer, it contacts `ffts`.
+    *   When a receiver wants to download a file, it also contacts `ffts` using a transfer ID provided by the sender.
+    *   `ffts` then assigns available `fftw` worker nodes to the transfer, enabling the parallel data streams.
+    *   `ffts` does not handle any of_the actual file data_ itself; it only manages control signals and metadata.
 
-**目前的交互协议可能随时改变，不保证向后兼容，升级新版本时需要注意公告说明。**
+*   **`fftw` (Worker Node):** These nodes are responsible for relaying the actual file data.
+    *   Multiple `fftw` instances can be deployed on various servers.
+    *   Each `fftw` registers itself with the `ffts` server, making itself available for relaying transfers.
+    *   Upon instruction from `ffts`, an `fftw` node will accept data from a sending `fft` client and forward it to the receiving `fft` client.
+    *   The more `fftw` nodes available and assigned to a transfer, the higher the potential aggregate bandwidth and thus faster transfer speeds.
 
-## 使用示例
+*   **`fft` (Client):** This is the command-line tool used by end-users to send or receive files.
+    *   **Sender:** When sending a file, the `fft` client:
+        1.  Contacts the `ffts` server to announce a new transfer and receives a unique transfer ID.
+        2.  Communicates this transfer ID to the intended recipient (e.g., via email, messaging).
+        3.  Upon `ffts` matching it with a receiver and assigning `fftw` nodes, the client splits the file data and sends parts of it in parallel to the assigned `fftw` nodes.
+    *   **Receiver:** When receiving a file, the `fft` client:
+        1.  Contacts the `ffts` server using the transfer ID obtained from the sender.
+        2.  `ffts` matches the receiver with the sender and provides the list of `fftw` nodes involved in the transfer.
+        3.  The client then receives data in parallel from these `fftw` nodes and reassembles the original file.
 
-* ffts: server 控制节点，部署一个。
-* fftw: worker 节点，负责中转流量，部署任意多个，更多的 worker 节点可以提高传输文件的速度。
-* fft: 客户端，用于发送和接收文件。
+The overall interaction is as follows:
+1.  `fftw` nodes start up and register with `ffts`.
+2.  An `fft` client (sender) initiates a transfer by contacting `ffts`. `ffts` provides a transfer ID.
+3.  The sender shares this transfer ID with another `fft` client (receiver).
+4.  The `fft` client (receiver) contacts `ffts` with the transfer ID.
+5.  `ffts` matches the sender and receiver and allocates a set of registered `fftw` nodes for the transfer. It informs both clients about these worker nodes.
+6.  The `fft` client (sender) then starts sending file data in parallel streams to the allocated `fftw` nodes.
+7.  The `fftw` nodes relay this data to the `fft` client (receiver).
+8.  The `fft` client (receiver) reassembles the data from the parallel streams to reconstruct the original file.
 
-每一个程序都可以通过 `-h` 来查看使用参数的说明。
+This architecture allows `fft` to achieve high-speed file transfers by distributing the load across multiple relay servers (`fftw`s), orchestrated by the central `ffts` controller.
 
-ffts 和 fftw 需要部署在有公网 IP 的机器上，且开放对应的端口供 fft 访问。
+## Development Status
 
-fftw 和 fft 默认会连接 `fft.gofrp.org:7777` 这个 ffts 服务，如果希望连接自己的 ffts，可以通过 `-s {server_addr}` 来指定自己部署的 ffts 地址。
+`fft` is currently in the early stages of development. Features are still being added, and it is primarily intended for testing purposes.
 
-### 发送文件
+The `master` branch is used for stable releases, while the `dev` branch is for ongoing development. You can try the latest release for testing.
+
+**The current communication protocol may change at any time and backward compatibility is not guaranteed. Please check the release notes when upgrading to a new version.**
+
+## Usage Example
+
+*   `ffts`: The server control node. Deploy one instance of this.
+*   `fftw`: Worker nodes that relay traffic. Deploy multiple instances of these. More worker nodes can increase file transfer speed.
+*   `fft`: The client, used for sending and receiving files.
+
+Each program's usage parameters can be viewed by running it with the `-h` flag.
+
+`ffts` and `fftw` need to be deployed on machines with public IP addresses, and their respective ports must be open for `fft` clients to access.
+
+By default, `fftw` and `fft` will attempt to connect to the `ffts` service at `fft.gofrp.org:7777`. If you wish to use your own `ffts` instance, you can specify its address using the `-s {server_addr}` option.
+
+### Sending a File
 
 `./fft -i 123 -l ./filename`
 
-`-i 123` 指定这次传输请求的 ID，需要是一个和其他人不重复的自定义值，之后将在这个 ID 通知接收方，接收方通过此 ID 来接收文件。
+*   `-i 123`: Specifies the transfer request ID. This should be a unique custom value. The receiver will use this ID to accept the file.
+*   `-l ./filename`: Specifies the path to the local file to be transferred.
 
-`-l ./filename` 指定需要传输的本地文件路径。
-
-### 接收文件
+### Receiving a File
 
 `./fft -i 123 -t ./`
 
-`-i 123` 指定这次接收传输请求的 ID。
-
-`-t ./` 指定保存文件到本地的路径，如果是目录，则保存发送方的文件名到指定目录，否则会创建一个新的文件。
+*   `-i 123`: Specifies the ID of the transfer request to accept.
+*   `-t ./`: Specifies the local path to save the received file. If it's a directory, the sender's original filename will be used and the file saved in that directory. Otherwise, a new file will be created with the specified name.
