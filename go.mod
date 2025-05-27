@@ -2,6 +2,7 @@ module github.com/fatedier/fft
 
 go 1.23
 
+
 require (
 	github.com/cheggaaa/pb v1.0.29
 	github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb
