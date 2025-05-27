@@ -1,8 +1,6 @@
 module github.com/fatedier/fft
 
-go 1.23.0
-
-toolchain go1.24.3
+go 1.23
 
 require (
 	github.com/cheggaaa/pb v1.0.29
