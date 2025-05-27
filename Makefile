@@ -13,3 +13,6 @@ fftw:
 
 ffts:
 	go build -ldflags "-s -w" -o bin/ffts ./cmd/ffts
+
+e2e:
+	./hack/run-e2e.sh
