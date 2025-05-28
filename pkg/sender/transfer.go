@@ -259,120 +259,120 @@ func (t *Transfer) ackReceiver() {
 								}
 							}
 						} else {
-						isSlowWorker := false
-						isFastWorker := false
-						
-						if t.framesSent > 20 {
-							// Calculate expected throughput based on RTT
-							expectedThroughput := float64(0)
+							isSlowWorker := false
+							isFastWorker := false
 							
+							if t.framesSent > 20 {
+								// Calculate expected throughput based on RTT
+								expectedThroughput := float64(0)
+								
+								if isLocalNetwork {
+									expectedThroughput = 500 * 1024 // 500KB/s as a reference point
+								} else if isRemoteNetwork {
+									expectedThroughput = 200 * 1024 // 200KB/s as a reference point
+								} else {
+									expectedThroughput = 300 * 1024 // 300KB/s as a reference point
+								}
+								
+								if t.currentThroughput < expectedThroughput*0.5 {
+									isSlowWorker = true
+								} else if t.currentThroughput > expectedThroughput*1.5 {
+									isFastWorker = true
+								}
+							}
+						
 							if isLocalNetwork {
-								expectedThroughput = 500 * 1024 // 500KB/s as a reference point
+								if isSlowWorker {
+									if rttVar < smoothedRTT/4 {
+										newLimit = currentLimit + (currentLimit / 2)
+									} else if rttVar < smoothedRTT/2 {
+										newLimit = currentLimit + (currentLimit / 3)
+									} else {
+										newLimit = currentLimit + (currentLimit / 5)
+									}
+								} else if isFastWorker {
+									if rttVar < smoothedRTT/4 {
+										newLimit = currentLimit + (currentLimit / 3)
+									} else if rttVar < smoothedRTT/2 {
+										newLimit = currentLimit + (currentLimit / 5)
+									} else {
+										newLimit = currentLimit + (currentLimit / 8)
+									}
+								} else {
+									if rttVar < smoothedRTT/4 {
+										newLimit = currentLimit + (currentLimit / 4)
+									} else if rttVar < smoothedRTT/2 {
+										newLimit = currentLimit + (currentLimit / 6)
+									} else {
+										newLimit = currentLimit + (currentLimit / 10)
+									}
+								}
+
+								if smoothedRTT > time.Duration(float64(minRTT)*2) {
+									if isSlowWorker {
+										newLimit = currentLimit * 4 / 5
+									} else {
+										newLimit = currentLimit * 3 / 4
+									}
+									if newLimit < 1 {
+										newLimit = 1
+									}
+								}
 							} else if isRemoteNetwork {
-								expectedThroughput = 200 * 1024 // 200KB/s as a reference point
-							} else {
-								expectedThroughput = 300 * 1024 // 300KB/s as a reference point
-							}
-							
-							if t.currentThroughput < expectedThroughput*0.5 {
-								isSlowWorker = true
-							} else if t.currentThroughput > expectedThroughput*1.5 {
-								isFastWorker = true
-							}
-						}
-						
-						if isLocalNetwork {
-							if isSlowWorker {
-								if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + (currentLimit / 2)
-								} else if rttVar < smoothedRTT/2 {
-									newLimit = currentLimit + (currentLimit / 3)
-								} else {
-									newLimit = currentLimit + (currentLimit / 5)
-								}
-							} else if isFastWorker {
-								if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + (currentLimit / 3)
-								} else if rttVar < smoothedRTT/2 {
-									newLimit = currentLimit + (currentLimit / 5)
-								} else {
-									newLimit = currentLimit + (currentLimit / 8)
-								}
-							} else {
-								if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + (currentLimit / 4)
-								} else if rttVar < smoothedRTT/2 {
-									newLimit = currentLimit + (currentLimit / 6)
-								} else {
-									newLimit = currentLimit + (currentLimit / 10)
-								}
-							}
-
-							if smoothedRTT > time.Duration(float64(minRTT)*2) {
 								if isSlowWorker {
-									newLimit = currentLimit * 4 / 5
+									if rttVar < smoothedRTT/8 {
+										newLimit = currentLimit + (currentLimit / 8)
+									} else if rttVar < smoothedRTT/4 {
+										newLimit = currentLimit + (currentLimit / 12)
+									} else {
+										newLimit = currentLimit + (currentLimit / 20)
+									}
 								} else {
-									newLimit = currentLimit * 3 / 4
+									if rttVar < smoothedRTT/8 {
+										newLimit = currentLimit + (currentLimit / 10)
+									} else if rttVar < smoothedRTT/4 {
+										newLimit = currentLimit + (currentLimit / 16)
+									} else {
+										newLimit = currentLimit + (currentLimit / 32)
+									}
 								}
-								if newLimit < 1 {
-									newLimit = 1
-								}
-							}
-						} else if isRemoteNetwork {
-							if isSlowWorker {
-								if rttVar < smoothedRTT/8 {
-									newLimit = currentLimit + (currentLimit / 8)
-								} else if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + (currentLimit / 12)
-								} else {
-									newLimit = currentLimit + (currentLimit / 20)
+
+								if smoothedRTT > time.Duration(float64(minRTT)*2) {
+									if isSlowWorker {
+										newLimit = currentLimit * 3 / 5
+									} else {
+										newLimit = currentLimit / 2
+									}
+									if newLimit < 1 {
+										newLimit = 1
+									}
 								}
 							} else {
-								if rttVar < smoothedRTT/8 {
-									newLimit = currentLimit + (currentLimit / 10)
-								} else if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + (currentLimit / 16)
-								} else {
-									newLimit = currentLimit + (currentLimit / 32)
-								}
-							}
-
-							if smoothedRTT > time.Duration(float64(minRTT)*2) {
+								rttMultiplier := t.rttStats.GetAdaptiveRTTMultiplier()
+								
 								if isSlowWorker {
-									newLimit = currentLimit * 3 / 5
+									rttMultiplier *= 0.8
+								} else if isFastWorker {
+									rttMultiplier *= 1.2
+								}
+								
+								if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + int64(float64(currentLimit)/(6*rttMultiplier))
 								} else {
-									newLimit = currentLimit / 2
+									newLimit = currentLimit + int64(float64(currentLimit)/(12*rttMultiplier))
 								}
-								if newLimit < 1 {
-									newLimit = 1
-								}
-							}
-						} else {
-							rttMultiplier := t.rttStats.GetAdaptiveRTTMultiplier()
-							
-							if isSlowWorker {
-								rttMultiplier *= 0.8
-							} else if isFastWorker {
-								rttMultiplier *= 1.2
-							}
-							
-							if rttVar < smoothedRTT/4 {
-								newLimit = currentLimit + int64(float64(currentLimit)/(6*rttMultiplier))
-							} else {
-								newLimit = currentLimit + int64(float64(currentLimit)/(12*rttMultiplier))
-							}
 
-							if smoothedRTT > time.Duration(float64(minRTT)*3) {
-								backoffFactor := 2.0 * rttMultiplier
-								if isSlowWorker {
-									backoffFactor *= 0.8 // Less aggressive backoff for slow workers
-								}
-								newLimit = int64(float64(currentLimit) / backoffFactor)
-								if newLimit < 1 {
-									newLimit = 1
+								if smoothedRTT > time.Duration(float64(minRTT)*3) {
+									backoffFactor := 2.0 * rttMultiplier
+									if isSlowWorker {
+										backoffFactor *= 0.8 // Less aggressive backoff for slow workers
+									}
+									newLimit = int64(float64(currentLimit) / backoffFactor)
+									if newLimit < 1 {
+										newLimit = 1
+									}
 								}
 							}
-						}
 
 						// Cap at maxBufferCount
 						if newLimit > int64(t.maxBufferCount) {
