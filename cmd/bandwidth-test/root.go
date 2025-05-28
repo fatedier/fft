@@ -34,7 +34,7 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of bandwidth test tool")
-	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file_size", "s", 0, "test file size in bytes, 0 means auto calculate based on duration")
+	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file_size", "s", 0, "test file size in KB, 0 means auto calculate based on duration")
 	rootCmd.PersistentFlags().IntVarP(&duration, "duration", "d", 25, "expected test duration in seconds, used to calculate file size if not specified")
 	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp_dir", "t", os.TempDir(), "directory to store temporary files")
 	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits (e.g., '200KB' for one worker, '200KB,200KB,300KB' for three workers)")
@@ -164,16 +164,18 @@ func runBandwidthTest() error {
 	time.Sleep(2 * time.Second)
 
 	if fileSize == 0 {
-		expectedSpeed := float64(totalBandwidth) * 1024 * 0.4 // KB/s to bytes/sec with efficiency factor
-		fileSize = int64(expectedSpeed * float64(duration))
-		fmt.Printf("Auto-calculated file size: %d bytes (%.2f MB) for %d seconds test\n",
-			fileSize, float64(fileSize)/(1024*1024), duration)
+		expectedSpeed := float64(totalBandwidth) * 1024 * 0.4      // KB/s to bytes/sec with efficiency factor
+		fileSize = int64(expectedSpeed * float64(duration) / 1024) // Convert bytes to KB
+		fmt.Printf("Auto-calculated file size: %d KB (%.2f MB) for %d seconds test\n",
+			fileSize, float64(fileSize)/1024, duration)
 		fmt.Printf("Based on total bandwidth of %dKB/s across %d workers\n",
 			totalBandwidth, len(workerRates))
 	}
 
+	fileSizeBytes := fileSize * 1024
+
 	testFilePath := filepath.Join(testDir, "test-file")
-	err = createTestFile(testFilePath, fileSize)
+	err = createTestFile(testFilePath, fileSizeBytes)
 	if err != nil {
 		return fmt.Errorf("failed to create test file: %v", err)
 	}
@@ -186,7 +188,7 @@ func runBandwidthTest() error {
 
 	transferID := fmt.Sprintf("bandwidth-test-%d", time.Now().UnixNano())
 
-	recvBar := pb.New(int(fileSize))
+	recvBar := pb.New(int(fileSizeBytes))
 	recvBar.ShowSpeed = true
 	recvBar.SetUnits(pb.U_BYTES)
 	recvBar.Start()
@@ -262,7 +264,7 @@ func runBandwidthTest() error {
 	kbPerSecond := bytesPerSecond / 1024
 
 	fmt.Printf("\nBandwidth Test Results:\n")
-	fmt.Printf("Total bytes transferred: %d (%.2f MB)\n", totalBytes, float64(totalBytes)/(1024*1024))
+	fmt.Printf("Total transferred: %d bytes (%.2f KB)\n", totalBytes, float64(totalBytes)/1024)
 	fmt.Printf("Transfer duration: %.2f seconds\n", duration.Seconds())
 	fmt.Printf("Average transfer speed: %.2f KB/s\n", kbPerSecond)
 
@@ -284,8 +286,8 @@ func runBandwidthTest() error {
 		return fmt.Errorf("failed to stat received file: %v", err)
 	}
 
-	if receivedInfo.Size() != fileSize {
-		return fmt.Errorf("received file size mismatch: got %d, expected %d", receivedInfo.Size(), fileSize)
+	if receivedInfo.Size() != fileSizeBytes {
+		return fmt.Errorf("received file size mismatch: got %d, expected %d", receivedInfo.Size(), fileSizeBytes)
 	}
 
 	fmt.Println("File transfer completed successfully!")
