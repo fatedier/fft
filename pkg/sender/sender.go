@@ -246,6 +246,22 @@ func (sender *Sender) loopSend() {
 			if count%10 == 0 {
 				sender.updateAllocationRatios()
 			}
+			
+			if len(sender.transfers) > 1 {
+				var fastestWorkerID int
+				maxThroughput := float64(0)
+				
+				for id, transfer := range sender.transfers {
+					if transfer.currentThroughput > maxThroughput {
+						maxThroughput = transfer.currentThroughput
+						fastestWorkerID = id
+					}
+				}
+				
+				if maxThroughput > 0 {
+					sf.SetTransferID(fastestWorkerID)
+				}
+			}
 		}
 		sender.mu.Unlock()
 
