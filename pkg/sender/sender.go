@@ -259,7 +259,7 @@ func (sender *Sender) loopSend() {
 				newSize := currentSize
 
 				// If network is stable (low RTT variation), increase frame size
-				if rttVar < smoothedRTT/4 && smoothedRTT < minRTT*1.5 {
+				if rttVar < smoothedRTT/4 && smoothedRTT < minRTT+minRTT/2 {
 					// Network is stable, increase frame size
 					newSize = int(float64(currentSize) * 1.25) // Increase by 25%
 
