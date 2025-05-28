@@ -271,7 +271,7 @@ func (sender *Sender) loopSend() {
 						newSize = int(float64(currentSize) * 0.9) // Decrease by 10%
 					}
 				} else if isRemoteNetwork {
-					if rttVar < smoothedRTT/8 && smoothedRTT < minRTT+minRTT/4 {
+					if rttVar < smoothedRTT/8 && smoothedRTT < time.Duration(float64(minRTT)*1.25) {
 						newSize = int(float64(currentSize) * 1.1) // Increase by 10%
 					} else if rttVar > smoothedRTT/4 || smoothedRTT > time.Duration(float64(minRTT)*1.5) {
 						newSize = int(float64(currentSize) * 0.75) // Decrease by 25%
