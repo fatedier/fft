@@ -11,11 +11,11 @@ import (
 
 var (
 	TestContext struct {
-		FFTPath    string
-		FFTSPath   string
-		FFTWPath   string
-		LogLevel   string
-		Debug      bool
+		FFTPath  string
+		FFTSPath string
+		FFTWPath string
+		LogLevel string
+		Debug    bool
 	}
 
 	RunID = fmt.Sprintf("%d", ginkgo.GinkgoRandomSeed())
@@ -33,7 +33,7 @@ type Framework struct {
 	beforeEachStarted bool
 
 	serverConfPath string
-	serverProcess *Process
+	serverProcess  *Process
 
 	workerConfPaths []string
 	workerProcesses []*Process

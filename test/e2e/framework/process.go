@@ -88,12 +88,12 @@ func (f *Framework) CreateTestFile(content []byte) (string, error) {
 
 	filename := fmt.Sprintf("test-file-%d", time.Now().UnixNano())
 	filepath := filepath.Join(f.TempDirectory, filename)
-	
+
 	err := os.WriteFile(filepath, content, 0644)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return filepath, nil
 }
 
@@ -102,16 +102,16 @@ func (f *Framework) VerifyFileContent(path string, expected []byte) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if len(content) != len(expected) {
 		return fmt.Errorf("file content length mismatch: got %d, expected %d", len(content), len(expected))
 	}
-	
+
 	for i := range content {
 		if content[i] != expected[i] {
 			return fmt.Errorf("file content mismatch at position %d: got %d, expected %d", i, content[i], expected[i])
 		}
 	}
-	
+
 	return nil
 }
