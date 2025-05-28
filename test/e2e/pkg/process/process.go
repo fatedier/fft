@@ -42,11 +42,11 @@ func (p *Process) Start() error {
 func (p *Process) Stop() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+
 	if p.stopped {
 		return nil
 	}
-	
+
 	p.stopped = true
 	p.cancel()
 	return p.cmd.Wait()

@@ -32,7 +32,6 @@ func RunE2ETests(t *testing.T) {
 	ginkgo.RunSpecs(t, "fft e2e suite", suiteConfig, reporterConfig)
 }
 
-//
 func setupSuite() {
 }
 

@@ -58,7 +58,7 @@ type CleanupActionHandle int
 
 var (
 	cleanupActionsLock sync.Mutex
-	cleanupActions     = map[CleanupActionHandle]func(){}
+	cleanupActions                         = map[CleanupActionHandle]func(){}
 	nextCleanupAction  CleanupActionHandle = 0
 )
 

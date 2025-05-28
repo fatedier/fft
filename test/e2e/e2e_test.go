@@ -8,8 +8,8 @@ import (
 
 	_ "github.com/onsi/ginkgo/v2"
 
-	"github.com/fatedier/fft/test/e2e/framework"
 	_ "github.com/fatedier/fft/test/e2e/basic"
+	"github.com/fatedier/fft/test/e2e/framework"
 )
 
 func handleFlags() {

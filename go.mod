@@ -4,7 +4,6 @@ go 1.23.0
 
 require (
 	github.com/cheggaaa/pb v1.0.29
-	github.com/fatedier/beego v0.0.0-20171024143340-6c6a4f5bd5eb
 	github.com/fatedier/golib v0.5.1
 	github.com/spf13/cobra v1.9.1
 	golang.org/x/time v0.11.0

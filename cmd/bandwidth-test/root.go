@@ -109,28 +109,28 @@ func runBandwidthTest() error {
 	serverArgs := []string{
 		"--bind-addr", serverAddr,
 	}
-	
+
 	serverProcess := NewProcess("Server", fftsPath, serverArgs, verbose)
 	err = serverProcess.Start()
 	if err != nil {
 		return fmt.Errorf("failed to start server process: %v", err)
 	}
 	defer serverProcess.Stop()
-	
+
 	fmt.Printf("Server started on %s\n", serverAddr)
 	time.Sleep(1 * time.Second)
-	
+
 	if !verbose {
 		if output := serverProcess.ErrorOutput(); len(output) > 0 {
 			fmt.Printf("Server startup warnings/errors: %s\n", output)
 		}
 	}
-	
+
 	workerProcesses := make([]*Process, 0, len(workerRates))
 	workerAddresses := make([]string, 0, len(workerRates))
-	
+
 	fftwPath := GetExecutablePath("fftw")
-	
+
 	for i, rate := range workerRates {
 		workerPort, err := allocPort()
 		if err != nil {
@@ -138,14 +138,14 @@ func runBandwidthTest() error {
 		}
 		workerAddr := fmt.Sprintf("127.0.0.1:%d", workerPort)
 		workerAddresses = append(workerAddresses, workerAddr)
-		
+
 		workerArgs := []string{
 			"--server-addr", serverAddr,
 			"--bind-addr", workerAddr,
 			"--advice-public-ip", "127.0.0.1",
 			"--rate", fmt.Sprintf("%d", rate),
 		}
-		
+
 		workerName := fmt.Sprintf("Worker%d", i+1)
 		workerProcess := NewProcess(workerName, fftwPath, workerArgs, verbose)
 		err = workerProcess.Start()
@@ -154,12 +154,12 @@ func runBandwidthTest() error {
 		}
 		workerProcesses = append(workerProcesses, workerProcess)
 		defer workerProcess.Stop()
-		
+
 		fmt.Printf("%s started on %s with bandwidth limit %dKB/s\n", workerName, workerAddr, rate)
 	}
-	
+
 	time.Sleep(2 * time.Second)
-	
+
 	if !verbose {
 		for i, process := range workerProcesses {
 			if output := process.ErrorOutput(); len(output) > 0 {
@@ -225,7 +225,7 @@ func runBandwidthTest() error {
 	receiverDoneCh := make(chan error, 1)
 
 	fmt.Println("Starting sender...")
-	
+
 	fftPath := GetExecutablePath("fft")
 	senderArgs := []string{
 		"--server-addr", serverAddr,
@@ -234,73 +234,73 @@ func runBandwidthTest() error {
 		"--frame-size", fmt.Sprintf("%d", 5*1024),
 		"--cache-count", "512",
 	}
-	
+
 	if verbose {
 		senderArgs = append(senderArgs, "--debug")
 	}
-	
+
 	senderProcess := NewProcess("Sender", fftPath, senderArgs, verbose)
-	
+
 	go func() {
 		err := senderProcess.Start()
 		if err != nil {
 			senderDoneCh <- fmt.Errorf("failed to start sender process: %v", err)
 			return
 		}
-		
+
 		err = senderProcess.cmd.Wait()
 		if err != nil {
 			senderDoneCh <- fmt.Errorf("sender process error: %v", err)
 			return
 		}
-		
+
 		if output := senderProcess.ErrorOutput(); strings.Contains(output, "error") {
 			senderDoneCh <- fmt.Errorf("sender error: %s", output)
 			return
 		}
-		
+
 		bar.Finish()
-		
+
 		senderDoneCh <- nil
 	}()
 
 	time.Sleep(2 * time.Second)
 
 	fmt.Println("Starting receiver...")
-	
+
 	receiverArgs := []string{
 		"--server-addr", serverAddr,
 		"--id", transferID,
 		"--recv-file", recvDir,
 		"--cache-count", "512",
 	}
-	
+
 	if verbose {
 		receiverArgs = append(receiverArgs, "--debug")
 	}
-	
+
 	receiverProcess := NewProcess("Receiver", fftPath, receiverArgs, verbose)
-	
+
 	go func() {
 		err := receiverProcess.Start()
 		if err != nil {
 			receiverDoneCh <- fmt.Errorf("failed to start receiver process: %v", err)
 			return
 		}
-		
+
 		err = receiverProcess.cmd.Wait()
 		if err != nil {
 			receiverDoneCh <- fmt.Errorf("receiver process error: %v", err)
 			return
 		}
-		
+
 		if output := receiverProcess.ErrorOutput(); strings.Contains(output, "error") {
 			receiverDoneCh <- fmt.Errorf("receiver error: %s", output)
 			return
 		}
-		
+
 		recvBar.Finish()
-		
+
 		receiverDoneCh <- nil
 	}()
 
@@ -348,7 +348,6 @@ func runBandwidthTest() error {
 
 	fmt.Printf("Expected combined speed: %d KB/s\n", totalBandwidth)
 	fmt.Printf("Efficiency: %.2f%%\n", (kbPerSecond/float64(totalBandwidth))*100)
-
 
 	fmt.Println("File transfer completed successfully!")
 
