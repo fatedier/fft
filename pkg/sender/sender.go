@@ -163,7 +163,7 @@ func (sender *Sender) updateAllocationRatios() {
 	
 	// Calculate total throughput across all transfers
 	totalThroughput := 0.0
-	for id, transfer := range sender.transfers {
+	for _, transfer := range sender.transfers {
 		if transfer.currentThroughput > 0 {
 			totalThroughput += transfer.currentThroughput
 		} else {
