@@ -14,6 +14,7 @@ type SendFrame struct {
 	retryTimes int
 	hasAck     bool
 	transferID int // ID of the transfer this frame is assigned to
+	rtt        time.Duration // Last measured RTT for this frame
 
 	mu sync.Mutex
 }
@@ -29,6 +30,24 @@ func (sf *SendFrame) UpdateSendTime() {
 	sf.mu.Lock()
 	sf.sendTime = time.Now()
 	sf.mu.Unlock()
+}
+
+func (sf *SendFrame) GetSendTime() time.Time {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	return sf.sendTime
+}
+
+func (sf *SendFrame) SetRTT(rtt time.Duration) {
+	sf.mu.Lock()
+	sf.rtt = rtt
+	sf.mu.Unlock()
+}
+
+func (sf *SendFrame) GetRTT() time.Duration {
+	sf.mu.Lock()
+	defer sf.mu.Unlock()
+	return sf.rtt
 }
 
 func (sf *SendFrame) FrameID() uint32 {

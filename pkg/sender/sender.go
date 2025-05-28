@@ -23,6 +23,9 @@ type Sender struct {
 
 	// each frame size
 	frameSize int
+	minFrameSize int
+	maxFrameSize int
+	adaptiveFrameSizingEnabled bool
 
 	// send src to remote Receiver
 	src io.Reader
@@ -45,6 +48,9 @@ type Sender struct {
 	waitAcks       map[uint32]*SendFrame
 	bufferFrames   []*SendFrame
 
+	rttStats *RTTStats
+	lastFrameSizeAdj time.Time
+
 	// 1 means all frames has been sent
 	sendAll      bool
 	mu           sync.Mutex
@@ -62,9 +68,22 @@ func NewSender(id uint32, src io.Reader, frameSize int, maxBufferCount int) (*Se
 		maxBufferCount = 100
 	}
 
+	minFrameSize := 1024     // 1KB minimum
+	maxFrameSize := 64 * 1024 // 64KB maximum
+	
+	if frameSize < minFrameSize {
+		frameSize = minFrameSize
+	} else if frameSize > maxFrameSize {
+		frameSize = maxFrameSize
+	}
+
+	now := time.Now()
 	s := &Sender{
 		id:                       id,
 		frameSize:                frameSize,
+		minFrameSize:             minFrameSize,
+		maxFrameSize:             maxFrameSize,
+		adaptiveFrameSizingEnabled: true,
 		src:                      src,
 		frameCh:                  make(chan *SendFrame),
 		ackCh:                    make(chan *stream.Ack),
@@ -77,6 +96,8 @@ func NewSender(id uint32, src io.Reader, frameSize int, maxBufferCount int) (*Se
 		limiter:                  make(chan struct{}, maxBufferCount),
 		waitAcks:                 make(map[uint32]*SendFrame),
 		bufferFrames:             make([]*SendFrame, 0),
+		rttStats:                 NewRTTStats(),
+		lastFrameSizeAdj:         now,
 		sendShutdown:             shutdown.New(),
 		ackShutdown:              shutdown.New(),
 	}
@@ -91,6 +112,37 @@ func (sender *Sender) EnableDynamicAllocation() {
 	defer sender.transfersMu.Unlock()
 
 	sender.dynamicAllocationEnabled = true
+}
+
+func (sender *Sender) EnableAdaptiveFrameSizing() {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+
+	sender.adaptiveFrameSizingEnabled = true
+}
+
+func (sender *Sender) SetFrameSizeBounds(minSize, maxSize int) error {
+	if !stream.IsValidFrameSize(minSize) || !stream.IsValidFrameSize(maxSize) {
+		return fmt.Errorf("invalid frame size bounds")
+	}
+	
+	if minSize > maxSize {
+		return fmt.Errorf("minimum frame size cannot be larger than maximum")
+	}
+	
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	
+	sender.minFrameSize = minSize
+	sender.maxFrameSize = maxSize
+	
+	if sender.frameSize < minSize {
+		sender.frameSize = minSize
+	} else if sender.frameSize > maxSize {
+		sender.frameSize = maxSize
+	}
+	
+	return nil
 }
 
 func (sender *Sender) HandleStream(s *stream.FrameStream) {
@@ -194,6 +246,44 @@ func (sender *Sender) loopSend() {
 	for {
 		<-sender.limiter
 
+		if sender.adaptiveFrameSizingEnabled {
+			now := time.Now()
+			if now.Sub(sender.lastFrameSizeAdj) > time.Second {
+				sender.mu.Lock()
+				
+				smoothedRTT := sender.rttStats.GetSmoothedRTT()
+				rttVar := sender.rttStats.GetRTTVariation()
+				minRTT := sender.rttStats.GetMinRTT()
+				
+				currentSize := sender.frameSize
+				newSize := currentSize
+				
+				// If network is stable (low RTT variation), increase frame size
+				if rttVar < smoothedRTT/4 && smoothedRTT < minRTT*1.5 {
+					// Network is stable, increase frame size
+					newSize = int(float64(currentSize) * 1.25) // Increase by 25%
+					
+					if newSize > sender.maxFrameSize {
+						newSize = sender.maxFrameSize
+					}
+				} else if rttVar > smoothedRTT/2 || smoothedRTT > minRTT*2 {
+					// Network is unstable or congested, decrease frame size
+					newSize = int(float64(currentSize) * 0.75) // Decrease by 25%
+					
+					if newSize < sender.minFrameSize {
+						newSize = sender.minFrameSize
+					}
+				}
+				
+				if newSize != currentSize {
+					sender.frameSize = newSize
+				}
+				
+				sender.lastFrameSizeAdj = now
+				sender.mu.Unlock()
+			}
+		}
+
 		// retry first
 		var retryFrame *SendFrame
 		sender.mu.Lock()
@@ -213,8 +303,12 @@ func (sender *Sender) loopSend() {
 			continue
 		}
 
+		sender.mu.Lock()
+		currentFrameSize := sender.frameSize
+		sender.mu.Unlock()
+
 		// no retry frames, get a new frame from src
-		buf := make([]byte, sender.frameSize)
+		buf := make([]byte, currentFrameSize)
 		n, err := sender.src.Read(buf)
 		if err == io.EOF {
 			// send last frame and it's buffer is nil
@@ -296,6 +390,12 @@ func (sender *Sender) ackHandler() {
 		sender.mu.Lock()
 		waitSendFrame, ok := sender.waitAcks[ack.FrameID]
 		if ok {
+			if !waitSendFrame.GetSendTime().IsZero() {
+				rtt := time.Since(waitSendFrame.GetSendTime())
+				waitSendFrame.SetRTT(rtt)
+				sender.rttStats.UpdateRTT(waitSendFrame.GetSendTime())
+			}
+			
 			waitSendFrame.SetAck()
 			delete(sender.waitAcks, ack.FrameID)
 
