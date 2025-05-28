@@ -31,10 +31,10 @@ func (w *OutputWriter) Write(p []byte) (n int, err error) {
 	if err != nil {
 		return n, err
 	}
-	
+
 	fmt.Print(w.prefix)
 	fmt.Print(string(p))
-	
+
 	return n, nil
 }
 
@@ -49,7 +49,7 @@ func NewProcess(name, path string, params []string, showOutput bool) *Process {
 	}
 	p.errorOutput = bytes.NewBufferString("")
 	p.stdOutput = bytes.NewBufferString("")
-	
+
 	if showOutput {
 		stdoutWriter := &OutputWriter{
 			buffer: p.stdOutput,
@@ -65,7 +65,7 @@ func NewProcess(name, path string, params []string, showOutput bool) *Process {
 		cmd.Stdout = p.stdOutput
 		cmd.Stderr = p.errorOutput
 	}
-	
+
 	return p
 }
 
@@ -76,11 +76,11 @@ func (p *Process) Start() error {
 func (p *Process) Stop() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	
+
 	if p.stopped {
 		return nil
 	}
-	
+
 	p.stopped = true
 	p.cancel()
 	return p.cmd.Wait()
@@ -102,7 +102,7 @@ func GetExecutablePath(name string) string {
 	if _, err := os.Stat(name); err == nil {
 		return name
 	}
-	
+
 	cwd, err := os.Getwd()
 	if err == nil {
 		binPath := filepath.Join(cwd, "bin", name)
@@ -110,6 +110,6 @@ func GetExecutablePath(name string) string {
 			return binPath
 		}
 	}
-	
+
 	return name
 }
