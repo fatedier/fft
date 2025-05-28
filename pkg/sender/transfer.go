@@ -261,11 +261,11 @@ func (t *Transfer) ackReceiver() {
 						} else {
 							isSlowWorker := false
 							isFastWorker := false
-							
+
 							if t.framesSent > 20 {
 								// Calculate expected throughput based on RTT
 								expectedThroughput := float64(0)
-								
+
 								if isLocalNetwork {
 									expectedThroughput = 500 * 1024 // 500KB/s as a reference point
 								} else if isRemoteNetwork {
@@ -273,14 +273,14 @@ func (t *Transfer) ackReceiver() {
 								} else {
 									expectedThroughput = 300 * 1024 // 300KB/s as a reference point
 								}
-								
+
 								if t.currentThroughput < expectedThroughput*0.5 {
 									isSlowWorker = true
 								} else if t.currentThroughput > expectedThroughput*1.5 {
 									isFastWorker = true
 								}
 							}
-						
+
 							if isLocalNetwork {
 								if isSlowWorker {
 									if rttVar < smoothedRTT/4 {
@@ -349,13 +349,13 @@ func (t *Transfer) ackReceiver() {
 								}
 							} else {
 								rttMultiplier := t.rttStats.GetAdaptiveRTTMultiplier()
-								
+
 								if isSlowWorker {
 									rttMultiplier *= 0.8
 								} else if isFastWorker {
 									rttMultiplier *= 1.2
 								}
-								
+
 								if rttVar < smoothedRTT/4 {
 									newLimit = currentLimit + int64(float64(currentLimit)/(6*rttMultiplier))
 								} else {
@@ -374,19 +374,20 @@ func (t *Transfer) ackReceiver() {
 								}
 							}
 
-						// Cap at maxBufferCount
-						if newLimit > int64(t.maxBufferCount) {
-							newLimit = int64(t.maxBufferCount)
-							t.inSlowStart = false
+							// Cap at maxBufferCount
+							if newLimit > int64(t.maxBufferCount) {
+								newLimit = int64(t.maxBufferCount)
+								t.inSlowStart = false
+							}
+
+							t.congestionWindow = newLimit
+							t.limiter.SetLimit(newLimit)
+							t.lastCongestionAdj = now
 						}
 
-						t.congestionWindow = newLimit
-						t.limiter.SetLimit(newLimit)
-						t.lastCongestionAdj = now
+						t.lastMetricTime = now
+						t.bytesTransferred = 0
 					}
-
-					t.lastMetricTime = now
-					t.bytesTransferred = 0
 				}
 			}
 
