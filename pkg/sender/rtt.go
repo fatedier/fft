@@ -161,7 +161,7 @@ func (r *RTTStats) IsRemoteNetwork() bool {
 func (r *RTTStats) GetAdaptiveRTTMultiplier() float64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	// Base multiplier based on network environment
 	var baseMultiplier float64
 	switch r.networkEnvironment {
@@ -172,24 +172,24 @@ func (r *RTTStats) GetAdaptiveRTTMultiplier() float64 {
 	default:
 		baseMultiplier = 1.0 // Default multiplier
 	}
-	
+
 	if r.samples < 10 {
 		return baseMultiplier // Not enough samples to make adjustments
 	}
-	
+
 	stabilityRatio := float64(r.rttVar) / float64(r.smoothedRTT)
-	
+
 	if stabilityRatio < 0.1 {
 		return baseMultiplier * 0.8
 	} else if stabilityRatio > 0.3 {
 		return baseMultiplier * 1.5
 	}
-	
+
 	if r.latestRTT < r.smoothedRTT {
 		return baseMultiplier * 0.9
 	} else if r.latestRTT > time.Duration(float64(r.smoothedRTT)*1.2) {
 		return baseMultiplier * 1.3
 	}
-	
+
 	return baseMultiplier
 }
