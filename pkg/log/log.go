@@ -1,17 +1,27 @@
 package log
 
 import (
-	"fmt"
+	"os"
 
-	"github.com/fatedier/beego/logs"
+	"github.com/fatedier/golib/log"
 )
 
-var Log *logs.BeeLogger
+var (
+	TraceLevel = log.TraceLevel
+	DebugLevel = log.DebugLevel
+	InfoLevel  = log.InfoLevel
+	WarnLevel  = log.WarnLevel
+	ErrorLevel = log.ErrorLevel
+)
+
+var defaultLogger *log.Logger
 
 func init() {
-	Log = logs.NewLogger(200)
-	Log.EnableFuncCallDepth(true)
-	Log.SetLogFuncCallDepth(Log.GetLogFuncCallDepth() + 1)
+	defaultLogger = log.New(
+		log.WithCaller(true),
+		log.AddCallerSkip(1),
+		log.WithLevel(log.InfoLevel),
+	)
 }
 
 func InitLog(logWay string, logFile string, logLevel string, maxdays int64) {
@@ -21,54 +31,54 @@ func InitLog(logWay string, logFile string, logLevel string, maxdays int64) {
 
 // logWay: file or console
 func SetLogFile(logWay string, logFile string, maxdays int64) {
+	options := []log.Option{}
 	if logWay == "console" {
-		Log.SetLogger("console", "")
+		options = append(options,
+			log.WithOutput(log.NewConsoleWriter(log.ConsoleConfig{
+				Colorful: true,
+			}, os.Stdout)),
+		)
 	} else {
-		params := fmt.Sprintf(`{"filename": "%s", "maxdays": %d}`, logFile, maxdays)
-		Log.SetLogger("file", params)
+		writer := log.NewRotateFileWriter(log.RotateFileConfig{
+			FileName: logFile,
+			Mode:     log.RotateFileModeDaily,
+			MaxDays:  int(maxdays),
+		})
+		writer.Init()
+		options = append(options, log.WithOutput(writer))
 	}
+	defaultLogger = defaultLogger.WithOptions(options...)
 }
 
 // value: error, warning, info, debug, trace
 func SetLogLevel(logLevel string) {
-	level := 4 // warning
-	switch logLevel {
-	case "error":
-		level = 3
-	case "warn":
-		level = 4
-	case "info":
-		level = 6
-	case "debug":
-		level = 7
-	case "trace":
-		level = 8
-	default:
-		level = 4
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		level = log.WarnLevel // default to warning
 	}
-	Log.SetLevel(level)
+	defaultLogger = defaultLogger.WithOptions(log.WithLevel(level))
 }
 
 // wrap log
 
 func Error(format string, v ...interface{}) {
-	Log.Error(format, v...)
+	defaultLogger.Errorf(format, v...)
 }
 
 func Warn(format string, v ...interface{}) {
-	Log.Warn(format, v...)
+	defaultLogger.Warnf(format, v...)
 }
 
 func Info(format string, v ...interface{}) {
-	Log.Info(format, v...)
+	defaultLogger.Infof(format, v...)
 }
 
 func Debug(format string, v ...interface{}) {
-	Log.Debug(format, v...)
+	defaultLogger.Debugf(format, v...)
 }
 
 func Trace(format string, v ...interface{}) {
-	Log.Trace(format, v...)
+	defaultLogger.Tracef(format, v...)
 }
 
 // Logger
@@ -120,21 +130,21 @@ func (pl *PrefixLogger) ClearLogPrefix() {
 }
 
 func (pl *PrefixLogger) Error(format string, v ...interface{}) {
-	Log.Error(pl.prefix+format, v...)
+	defaultLogger.Errorf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Warn(format string, v ...interface{}) {
-	Log.Warn(pl.prefix+format, v...)
+	defaultLogger.Warnf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Info(format string, v ...interface{}) {
-	Log.Info(pl.prefix+format, v...)
+	defaultLogger.Infof(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Debug(format string, v ...interface{}) {
-	Log.Debug(pl.prefix+format, v...)
+	defaultLogger.Debugf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Trace(format string, v ...interface{}) {
-	Log.Trace(pl.prefix+format, v...)
+	defaultLogger.Tracef(pl.prefix+format, v...)
 }
