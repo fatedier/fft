@@ -70,7 +70,7 @@ Each program's usage parameters can be viewed by running it with the `-h` flag.
 
 `ffts` and `fftw` need to be deployed on machines with public IP addresses, and their respective ports must be open for `fft` clients to access.
 
-By default, `fftw` and `fft` will attempt to connect to the `ffts` service at `fft.gofrp.org:7777`. If you wish to use your own `ffts` instance, you can specify its address using the `-s {server_addr}` option.
+By default, `fftw` and `fft` will attempt to connect to the `ffts` service at `fft.gofrp.org:7777`. If you wish to use your own `ffts` instance, you can specify its address using the `-s {server-addr}` option.
 
 ### Sending a File
 
