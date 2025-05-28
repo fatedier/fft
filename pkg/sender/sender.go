@@ -242,25 +242,9 @@ func (sender *Sender) loopSend() {
 		sender.waitAcks[sf.FrameID()] = sf
 		sender.bufferFrames = append(sender.bufferFrames, sf)
 		
-		if sender.dynamicAllocationEnabled && len(sender.transfers) > 0 {
+		if sender.dynamicAllocationEnabled {
 			if count%10 == 0 {
 				sender.updateAllocationRatios()
-			}
-			
-			totalRatio := 0.0
-			for _, ratio := range sender.allocationRatios {
-				totalRatio += ratio
-			}
-			
-			randomValue := totalRatio * (float64(count % 100) / 100.0)
-			cumulativeRatio := 0.0
-			
-			for id, ratio := range sender.allocationRatios {
-				cumulativeRatio += ratio
-				if randomValue <= cumulativeRatio {
-					sf.SetTransferID(id)
-					break
-				}
 			}
 		}
 		sender.mu.Unlock()
