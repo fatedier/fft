@@ -227,28 +227,79 @@ func (t *Transfer) ackReceiver() {
 						smoothedRTT := t.rttStats.GetSmoothedRTT()
 						rttVar := t.rttStats.GetRTTVariation()
 						minRTT := t.rttStats.GetMinRTT()
+						rttMultiplier := t.rttStats.GetAdaptiveRTTMultiplier()
+						isLocalNetwork := t.rttStats.IsLocalNetwork()
+						isRemoteNetwork := t.rttStats.IsRemoteNetwork()
 
 						currentLimit := t.limiter.LimitNum()
 						newLimit := currentLimit
 
 						if t.inSlowStart {
-							newLimit = currentLimit * 2
-
-							if smoothedRTT > minRTT*2 && t.framesSent > 20 {
-								t.inSlowStart = false
-								newLimit = currentLimit
+							if isLocalNetwork {
+								newLimit = currentLimit * 3
+								
+								if smoothedRTT > minRTT*1.5 && t.framesSent > 10 {
+									t.inSlowStart = false
+									newLimit = currentLimit * 2
+								}
+							} else if isRemoteNetwork {
+								newLimit = currentLimit * 2
+								
+								if smoothedRTT > minRTT*3 && t.framesSent > 30 {
+									t.inSlowStart = false
+									newLimit = currentLimit
+								}
+							} else {
+								newLimit = currentLimit * 2
+								
+								if smoothedRTT > minRTT*(2*rttMultiplier) && t.framesSent > 20 {
+									t.inSlowStart = false
+									newLimit = currentLimit
+								}
 							}
 						} else {
-							if rttVar < smoothedRTT/4 {
-								newLimit = currentLimit + (currentLimit / 8)
+							if isLocalNetwork {
+								if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + (currentLimit / 4)
+								} else if rttVar < smoothedRTT/2 {
+									newLimit = currentLimit + (currentLimit / 6)
+								} else {
+									newLimit = currentLimit + (currentLimit / 10)
+								}
+								
+								if smoothedRTT > minRTT*2 {
+									newLimit = currentLimit * 3 / 4
+									if newLimit < 1 {
+										newLimit = 1
+									}
+								}
+							} else if isRemoteNetwork {
+								if rttVar < smoothedRTT/8 {
+									newLimit = currentLimit + (currentLimit / 10)
+								} else if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + (currentLimit / 16)
+								} else {
+									newLimit = currentLimit + (currentLimit / 32)
+								}
+								
+								if smoothedRTT > minRTT*2 {
+									newLimit = currentLimit / 2
+									if newLimit < 1 {
+										newLimit = 1
+									}
+								}
 							} else {
-								newLimit = currentLimit + (currentLimit / 16)
-							}
-
-							if smoothedRTT > minRTT*3 {
-								newLimit = currentLimit / 2
-								if newLimit < 1 {
-									newLimit = 1
+								if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + int64(float64(currentLimit) / (8 * rttMultiplier))
+								} else {
+									newLimit = currentLimit + int64(float64(currentLimit) / (16 * rttMultiplier))
+								}
+								
+								if smoothedRTT > minRTT*3 {
+									newLimit = int64(float64(currentLimit) / (2 * rttMultiplier))
+									if newLimit < 1 {
+										newLimit = 1
+									}
 								}
 							}
 						}

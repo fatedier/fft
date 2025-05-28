@@ -254,25 +254,50 @@ func (sender *Sender) loopSend() {
 				smoothedRTT := sender.rttStats.GetSmoothedRTT()
 				rttVar := sender.rttStats.GetRTTVariation()
 				minRTT := sender.rttStats.GetMinRTT()
+				rttMultiplier := sender.rttStats.GetAdaptiveRTTMultiplier()
 
 				currentSize := sender.frameSize
 				newSize := currentSize
 
-				// If network is stable (low RTT variation), increase frame size
-				if rttVar < smoothedRTT/4 && smoothedRTT < minRTT+minRTT/2 {
-					// Network is stable, increase frame size
-					newSize = int(float64(currentSize) * 1.25) // Increase by 25%
+				isLocalNetwork := sender.rttStats.IsLocalNetwork()
+				isRemoteNetwork := sender.rttStats.IsRemoteNetwork()
 
-					if newSize > sender.maxFrameSize {
-						newSize = sender.maxFrameSize
+				if isLocalNetwork {
+					if rttVar < smoothedRTT/4 {
+						newSize = int(float64(currentSize) * 1.5) // Increase by 50%
+					} else if rttVar < smoothedRTT/2 {
+						newSize = int(float64(currentSize) * 1.25) // Increase by 25%
+					} else if rttVar > smoothedRTT/2 {
+						newSize = int(float64(currentSize) * 0.9) // Decrease by 10%
 					}
-				} else if rttVar > smoothedRTT/2 || smoothedRTT > minRTT*2 {
-					// Network is unstable or congested, decrease frame size
-					newSize = int(float64(currentSize) * 0.75) // Decrease by 25%
+				} else if isRemoteNetwork {
+					if rttVar < smoothedRTT/8 && smoothedRTT < minRTT+minRTT/4 {
+						newSize = int(float64(currentSize) * 1.1) // Increase by 10%
+					} else if rttVar > smoothedRTT/4 || smoothedRTT > minRTT*1.5 {
+						newSize = int(float64(currentSize) * 0.75) // Decrease by 25%
+					}
+				} else {
+					if rttVar < smoothedRTT/4 && smoothedRTT < minRTT+minRTT/2 {
+						// Network is stable, increase frame size
+						newSize = int(float64(currentSize) * (1.0 + 0.25/rttMultiplier))
 
-					if newSize < sender.minFrameSize {
-						newSize = sender.minFrameSize
+						if newSize > sender.maxFrameSize {
+							newSize = sender.maxFrameSize
+						}
+					} else if rttVar > smoothedRTT/2 || smoothedRTT > minRTT*2 {
+						// Network is unstable or congested, decrease frame size
+						newSize = int(float64(currentSize) * (1.0 - 0.25*rttMultiplier))
+
+						if newSize < sender.minFrameSize {
+							newSize = sender.minFrameSize
+						}
 					}
+				}
+
+				if newSize > sender.maxFrameSize {
+					newSize = sender.maxFrameSize
+				} else if newSize < sender.minFrameSize {
+					newSize = sender.minFrameSize
 				}
 
 				if newSize != currentSize {
