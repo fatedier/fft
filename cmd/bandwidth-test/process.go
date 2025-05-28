@@ -116,5 +116,10 @@ func GetExecutablePath(name string) string {
 		}
 	}
 
-	return "./" + name
+	path, err := exec.LookPath(name)
+	if err == nil {
+		return path
+	}
+
+	return name
 }
