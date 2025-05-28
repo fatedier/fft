@@ -8,6 +8,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +29,7 @@ var (
 	fileSize    int64
 	duration    int
 	tempDir     string
+	workers     string
 )
 
 func init() {
@@ -34,6 +37,7 @@ func init() {
 	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file_size", "s", 0, "test file size in bytes, 0 means auto calculate based on duration")
 	rootCmd.PersistentFlags().IntVarP(&duration, "duration", "d", 25, "expected test duration in seconds, used to calculate file size if not specified")
 	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp_dir", "t", os.TempDir(), "directory to store temporary files")
+	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits (e.g., '200KB' for one worker, '200KB,200KB,300KB' for three workers)")
 }
 
 var rootCmd = &cobra.Command{
@@ -49,6 +53,38 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+func parseWorkerBandwidths(workersStr string) ([]int, error) {
+	if workersStr == "" {
+		return []int{100, 500}, nil // Default: 100KB/s and 500KB/s
+	}
+
+	parts := strings.Split(workersStr, ",")
+	rates := make([]int, 0, len(parts))
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+
+		part = strings.TrimSuffix(part, "KB")
+
+		rate, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid bandwidth format '%s': %v", part, err)
+		}
+
+		if rate < 50 {
+			return nil, fmt.Errorf("bandwidth must be at least 50KB/s, got %dKB/s", rate)
+		}
+
+		rates = append(rates, rate)
+	}
+
+	if len(rates) == 0 {
+		return nil, fmt.Errorf("no valid worker bandwidths specified")
+	}
+
+	return rates, nil
+}
+
 func runBandwidthTest() error {
 	fmt.Println("Starting bandwidth aggregation test...")
 
@@ -58,6 +94,16 @@ func runBandwidthTest() error {
 		return fmt.Errorf("failed to create test directory: %v", err)
 	}
 	defer os.RemoveAll(testDir)
+
+	workerRates, err := parseWorkerBandwidths(workers)
+	if err != nil {
+		return fmt.Errorf("failed to parse worker configuration: %v", err)
+	}
+
+	var totalBandwidth int
+	for _, rate := range workerRates {
+		totalBandwidth += rate
+	}
 
 	serverPort, err := allocPort()
 	if err != nil {
@@ -81,61 +127,49 @@ func runBandwidthTest() error {
 	fmt.Printf("Server started on %s\n", serverAddr)
 	time.Sleep(1 * time.Second)
 
-	worker1Port, err := allocPort()
-	if err != nil {
-		return fmt.Errorf("failed to allocate worker1 port: %v", err)
-	}
-	worker1Addr := fmt.Sprintf("127.0.0.1:%d", worker1Port)
+	workerServices := make([]*worker.Service, 0, len(workerRates))
+	workerAddresses := make([]string, 0, len(workerRates))
 
-	worker1Options := worker.Options{
-		ServerAddr:     serverAddr,
-		BindAddr:       worker1Addr,
-		AdvicePublicIP: "127.0.0.1",
-		RateKB:         100, // 100KB/s
-	}
-	worker1Svc, err := worker.NewService(worker1Options)
-	if err != nil {
-		return fmt.Errorf("failed to create worker1 service: %v", err)
-	}
-
-	go func() {
-		if err := worker1Svc.Run(); err != nil {
-			fmt.Printf("Worker1 error: %v\n", err)
+	for i, rate := range workerRates {
+		workerPort, err := allocPort()
+		if err != nil {
+			return fmt.Errorf("failed to allocate worker%d port: %v", i+1, err)
 		}
-	}()
-	fmt.Printf("Worker1 started on %s with bandwidth limit 100KB/s\n", worker1Addr)
+		workerAddr := fmt.Sprintf("127.0.0.1:%d", workerPort)
+		workerAddresses = append(workerAddresses, workerAddr)
 
-	worker2Port, err := allocPort()
-	if err != nil {
-		return fmt.Errorf("failed to allocate worker2 port: %v", err)
-	}
-	worker2Addr := fmt.Sprintf("127.0.0.1:%d", worker2Port)
-
-	worker2Options := worker.Options{
-		ServerAddr:     serverAddr,
-		BindAddr:       worker2Addr,
-		AdvicePublicIP: "127.0.0.1",
-		RateKB:         500, // 500KB/s
-	}
-	worker2Svc, err := worker.NewService(worker2Options)
-	if err != nil {
-		return fmt.Errorf("failed to create worker2 service: %v", err)
-	}
-
-	go func() {
-		if err := worker2Svc.Run(); err != nil {
-			fmt.Printf("Worker2 error: %v\n", err)
+		workerOptions := worker.Options{
+			ServerAddr:     serverAddr,
+			BindAddr:       workerAddr,
+			AdvicePublicIP: "127.0.0.1",
+			RateKB:         rate,
 		}
-	}()
-	fmt.Printf("Worker2 started on %s with bandwidth limit 500KB/s\n", worker2Addr)
+
+		workerSvc, err := worker.NewService(workerOptions)
+		if err != nil {
+			return fmt.Errorf("failed to create worker%d service: %v", i+1, err)
+		}
+		workerServices = append(workerServices, workerSvc)
+
+		workerIndex := i + 1
+		go func(idx int, svc *worker.Service, addr string, bw int) {
+			if err := svc.Run(); err != nil {
+				fmt.Printf("Worker%d error: %v\n", idx, err)
+			}
+		}(workerIndex, workerSvc, workerAddr, rate)
+
+		fmt.Printf("Worker%d started on %s with bandwidth limit %dKB/s\n", workerIndex, workerAddr, rate)
+	}
 
 	time.Sleep(2 * time.Second)
 
 	if fileSize == 0 {
-		expectedSpeed := 600 * 1024 * 0.4 // 240KB/s in bytes/sec
+		expectedSpeed := float64(totalBandwidth) * 1024 * 0.4 // KB/s to bytes/sec with efficiency factor
 		fileSize = int64(expectedSpeed * float64(duration))
 		fmt.Printf("Auto-calculated file size: %d bytes (%.2f MB) for %d seconds test\n",
 			fileSize, float64(fileSize)/(1024*1024), duration)
+		fmt.Printf("Based on total bandwidth of %dKB/s across %d workers\n",
+			totalBandwidth, len(workerRates))
 	}
 
 	testFilePath := filepath.Join(testDir, "test-file")
@@ -231,8 +265,18 @@ func runBandwidthTest() error {
 	fmt.Printf("Total bytes transferred: %d (%.2f MB)\n", totalBytes, float64(totalBytes)/(1024*1024))
 	fmt.Printf("Transfer duration: %.2f seconds\n", duration.Seconds())
 	fmt.Printf("Average transfer speed: %.2f KB/s\n", kbPerSecond)
-	fmt.Printf("Expected combined speed: 600 KB/s (100 KB/s + 500 KB/s)\n")
-	fmt.Printf("Efficiency: %.2f%%\n", (kbPerSecond/600)*100)
+
+	fmt.Printf("Worker configuration: ")
+	for i, rate := range workerRates {
+		if i > 0 {
+			fmt.Printf(", ")
+		}
+		fmt.Printf("%dKB/s", rate)
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Expected combined speed: %d KB/s\n", totalBandwidth)
+	fmt.Printf("Efficiency: %.2f%%\n", (kbPerSecond/float64(totalBandwidth))*100)
 
 	receivedFilePath := filepath.Join(recvDir, filepath.Base(testFilePath))
 	receivedInfo, err := os.Stat(receivedFilePath)
