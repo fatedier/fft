@@ -61,27 +61,20 @@ func (r *Receiver) RecvFrame(frame *stream.Frame) {
 		return
 	}
 
-	if r.unorderedEnabled {
-		if frame.FrameID > r.nextFrameID {
-			if len(r.orderedBuffer) < r.maxBufferSize {
-				r.orderedBuffer[frame.FrameID] = frame
-				r.framesIDMap[frame.FrameID] = struct{}{}
-			}
-			r.mu.Unlock()
-			
-			select {
-			case r.notifyCh <- struct{}{}:
-			default:
-			}
-			return
-		}
-	}
-
-	r.frames = append(r.frames, frame)
 	r.framesIDMap[frame.FrameID] = struct{}{}
-	sort.Slice(r.frames, func(i, j int) bool {
-		return r.frames[i].FrameID < r.frames[j].FrameID
-	})
+	
+	if r.unorderedEnabled {
+		if frame.FrameID == r.nextFrameID {
+			r.frames = append(r.frames, frame)
+		} else {
+			r.orderedBuffer[frame.FrameID] = frame
+		}
+	} else {
+		r.frames = append(r.frames, frame)
+		sort.Slice(r.frames, func(i, j int) bool {
+			return r.frames[i].FrameID < r.frames[j].FrameID
+		})
+	}
 	r.mu.Unlock()
 
 	select {
