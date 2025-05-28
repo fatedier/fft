@@ -118,6 +118,13 @@ func (t *Transfer) frameSender() {
 			t.s.Close()
 			return
 		}
+		
+		if sf.GetTransferID() != -1 && sf.GetTransferID() != t.id {
+			go func() {
+				t.frameCh <- sf
+			}()
+			continue
+		}
 
 		t.mu.Lock()
 		t.waitAcks[sf.FrameID()] = sf
