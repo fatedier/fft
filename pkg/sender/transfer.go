@@ -22,7 +22,7 @@ type Transfer struct {
 	startTime         time.Time
 	lastMetricTime    time.Time
 	currentThroughput float64 // bytes per second
-	
+
 	rttStats          *RTTStats
 	congestionWindow  int64
 	lastCongestionAdj time.Time
@@ -114,9 +114,9 @@ func (t *Transfer) frameSender() {
 			} else {
 				rttVar := t.rttStats.GetRTTVariation()
 				smoothedRTT := t.rttStats.GetSmoothedRTT()
-				
+
 				if rttVar < smoothedRTT/4 {
-					n += n/4
+					n += n / 4
 				} else {
 					n++
 				}
@@ -155,14 +155,14 @@ func (t *Transfer) frameSender() {
 			now := time.Now()
 			smoothedRTT := t.rttStats.GetSmoothedRTT()
 			rttTimeout := smoothedRTT * 3 // Timeout threshold
-			
+
 			for frameID, waitFrame := range t.waitAcks {
 				if frameID != sf.FrameID() && !waitFrame.sendTime.IsZero() {
 					elapsed := now.Sub(waitFrame.sendTime)
 					if elapsed > rttTimeout {
 						waitFrame.retryTimes++
 						waitFrame.UpdateSendTime() // Update send time for retransmission
-						
+
 						err = t.s.WriteFrame(waitFrame.Frame())
 						if err != nil {
 							t.mu.Unlock()
@@ -215,13 +215,13 @@ func (t *Transfer) ackReceiver() {
 						smoothedRTT := t.rttStats.GetSmoothedRTT()
 						rttVar := t.rttStats.GetRTTVariation()
 						minRTT := t.rttStats.GetMinRTT()
-						
+
 						currentLimit := t.limiter.LimitNum()
 						newLimit := currentLimit
 
 						if t.inSlowStart {
 							newLimit = currentLimit * 2
-							
+
 							if smoothedRTT > minRTT*2 && t.framesSent > 20 {
 								t.inSlowStart = false
 								newLimit = currentLimit
@@ -232,7 +232,7 @@ func (t *Transfer) ackReceiver() {
 							} else {
 								newLimit = currentLimit + (currentLimit / 16)
 							}
-							
+
 							if smoothedRTT > minRTT*3 {
 								newLimit = currentLimit / 2
 								if newLimit < 1 {

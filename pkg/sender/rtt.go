@@ -52,7 +52,7 @@ func (r *RTTStats) UpdateRTT(sendTime time.Time) {
 func (r *RTTStats) GetSmoothedRTT() time.Duration {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if r.samples == 0 {
 		return time.Millisecond * 100 // Default value if no samples
 	}
@@ -62,7 +62,7 @@ func (r *RTTStats) GetSmoothedRTT() time.Duration {
 func (r *RTTStats) GetRTTVariation() time.Duration {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if r.samples == 0 {
 		return time.Millisecond * 50 // Default value if no samples
 	}
@@ -72,7 +72,7 @@ func (r *RTTStats) GetRTTVariation() time.Duration {
 func (r *RTTStats) GetMinRTT() time.Duration {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	
+
 	if r.minRTT == time.Hour {
 		return time.Millisecond * 50 // Default value if no valid minimum
 	}
