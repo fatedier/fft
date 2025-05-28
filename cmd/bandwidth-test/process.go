@@ -99,6 +99,11 @@ func (p *Process) StdOutput() string {
 }
 
 func GetExecutablePath(name string) string {
+	currentDirPath := "./" + name
+	if _, err := os.Stat(currentDirPath); err == nil {
+		return currentDirPath
+	}
+
 	if _, err := os.Stat(name); err == nil {
 		return name
 	}
@@ -111,5 +116,5 @@ func GetExecutablePath(name string) string {
 		}
 	}
 
-	return name
+	return "./" + name
 }
