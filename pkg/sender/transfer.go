@@ -158,7 +158,7 @@ func (t *Transfer) ackReceiver() {
 					// Calculate bytes per second
 					t.currentThroughput = float64(t.bytesTransferred) / elapsedSeconds
 					
-					currentLimit := t.limiter.GetLimit()
+					currentLimit := t.limiter.LimitNum()
 					if t.currentThroughput > 0 {
 						newLimit := currentLimit
 						if t.inSlowStart {
