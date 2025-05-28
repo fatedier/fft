@@ -17,10 +17,10 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of fft server")
-	rootCmd.PersistentFlags().StringVarP(&options.BindAddr, "bind_addr", "b", "0.0.0.0:7777", "bind address")
-	rootCmd.PersistentFlags().StringVarP(&options.LogFile, "log_file", "", "console", "log file path")
-	rootCmd.PersistentFlags().StringVarP(&options.LogLevel, "log_level", "", "info", "log level")
-	rootCmd.PersistentFlags().Int64VarP(&options.LogMaxDays, "log_max_days", "", 3, "log file reserved max days")
+	rootCmd.PersistentFlags().StringVarP(&options.BindAddr, "bind-addr", "b", "0.0.0.0:7777", "bind address")
+	rootCmd.PersistentFlags().StringVarP(&options.LogFile, "log-file", "", "console", "log file path")
+	rootCmd.PersistentFlags().StringVarP(&options.LogLevel, "log-level", "", "info", "log level")
+	rootCmd.PersistentFlags().Int64VarP(&options.LogMaxDays, "log-max-days", "", 3, "log file reserved max days")
 }
 
 var rootCmd = &cobra.Command{

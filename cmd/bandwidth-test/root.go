@@ -34,9 +34,9 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of bandwidth test tool")
-	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file_size", "s", 0, "test file size in KB, 0 means auto calculate based on duration")
+	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file-size", "s", 0, "test file size in KB, 0 means auto calculate based on duration")
 	rootCmd.PersistentFlags().IntVarP(&duration, "duration", "d", 25, "expected test duration in seconds, used to calculate file size if not specified")
-	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp_dir", "t", os.TempDir(), "directory to store temporary files")
+	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp-dir", "t", os.TempDir(), "directory to store temporary files")
 	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits (e.g., '200KB' for one worker, '200KB,200KB,300KB' for three workers)")
 }
 
