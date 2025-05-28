@@ -88,6 +88,13 @@ func (svc *Service) sendFile(id string, filePath string) error {
 		return err
 	}
 
+	if svc.dynamicAllocation {
+		if svc.debugMode {
+			fmt.Println("Enabling dynamic frame allocation")
+		}
+		s.EnableDynamicAllocation()
+	}
+
 	for _, worker := range m.Workers {
 		wait.Add(1)
 		go func(addr string) {

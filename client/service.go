@@ -5,13 +5,16 @@ import (
 )
 
 type Options struct {
-	ServerAddr string
-	ID         string
-	SendFile   string
-	FrameSize  int
-	CacheCount int
-	RecvFile   string
-	DebugMode  bool
+	ServerAddr                string
+	ID                        string
+	SendFile                  string
+	FrameSize                 int
+	CacheCount                int
+	RecvFile                  string
+	DebugMode                 bool
+	EnableUnorderedProcessing bool
+	DynamicAllocation         bool
+	BufferSize                int
 }
 
 func (op *Options) Check() error {
@@ -32,10 +35,13 @@ func (op *Options) Check() error {
 }
 
 type Service struct {
-	debugMode  bool
-	serverAddr string
-	frameSize  int
-	cacheCount int
+	debugMode                 bool
+	serverAddr                string
+	frameSize                 int
+	cacheCount                int
+	enableUnorderedProcessing bool
+	dynamicAllocation         bool
+	bufferSize                int
 
 	runHandler func() error
 }
@@ -46,10 +52,13 @@ func NewService(options Options) (*Service, error) {
 	}
 
 	svc := &Service{
-		debugMode:  options.DebugMode,
-		serverAddr: options.ServerAddr,
-		frameSize:  options.FrameSize,
-		cacheCount: options.CacheCount,
+		debugMode:                 options.DebugMode,
+		serverAddr:                options.ServerAddr,
+		frameSize:                 options.FrameSize,
+		cacheCount:                options.CacheCount,
+		enableUnorderedProcessing: options.EnableUnorderedProcessing,
+		dynamicAllocation:         options.DynamicAllocation,
+		bufferSize:                options.BufferSize,
 	}
 
 	if options.SendFile != "" {

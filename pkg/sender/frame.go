@@ -13,13 +13,15 @@ type SendFrame struct {
 	sendTime   time.Time
 	retryTimes int
 	hasAck     bool
+	transferID int // ID of the transfer this frame is assigned to
 
 	mu sync.Mutex
 }
 
 func NewSendFrame(frame *stream.Frame) *SendFrame {
 	return &SendFrame{
-		frame: frame,
+		frame:      frame,
+		transferID: -1, // -1 means not assigned to any specific transfer
 	}
 }
 
@@ -43,4 +45,12 @@ func (sf *SendFrame) HasAck() bool {
 
 func (sf *SendFrame) SetAck() {
 	sf.hasAck = true
+}
+
+func (sf *SendFrame) SetTransferID(id int) {
+	sf.transferID = id
+}
+
+func (sf *SendFrame) GetTransferID() int {
+	return sf.transferID
 }
