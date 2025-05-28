@@ -62,7 +62,7 @@ func sendFile(serverAddr, id, filePath string, frameSize, cacheCount int, callba
 	if len(m.Workers) == 0 {
 		return fmt.Errorf("no available workers")
 	}
-	
+
 	fmt.Printf("ID: %s\n", m.ID)
 	fmt.Printf("Workers: %v\n", m.Workers)
 

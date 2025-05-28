@@ -76,7 +76,7 @@ func recvFile(serverAddr, id, filePath string, cacheCount int, callback func(n i
 
 	callbackWriter := fio.NewCallbackWriter(f, callback)
 	recv := receiver.NewReceiver(0, callbackWriter)
-	
+
 	var wait sync.WaitGroup
 	for _, worker := range m.Workers {
 		wait.Add(1)
@@ -129,7 +129,7 @@ func newRecvStream(recv *receiver.Receiver, id string, addr string) {
 		return
 	}
 	conn.SetReadDeadline(time.Time{})
-	
+
 	m, ok := raw.(*msg.NewReceiveFileStreamResp)
 	if !ok {
 		fmt.Printf("[%s] Invalid response format\n", addr)
