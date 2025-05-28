@@ -14,10 +14,10 @@ var (
 	ErrorLevel = log.ErrorLevel
 )
 
-var StdLogger *log.Logger
+var defaultLogger *log.Logger
 
 func init() {
-	StdLogger = log.New(
+	defaultLogger = log.New(
 		log.WithCaller(true),
 		log.AddCallerSkip(1),
 		log.WithLevel(log.InfoLevel),
@@ -47,7 +47,7 @@ func SetLogFile(logWay string, logFile string, maxdays int64) {
 		writer.Init()
 		options = append(options, log.WithOutput(writer))
 	}
-	StdLogger = StdLogger.WithOptions(options...)
+	defaultLogger = defaultLogger.WithOptions(options...)
 }
 
 // value: error, warning, info, debug, trace
@@ -56,29 +56,29 @@ func SetLogLevel(logLevel string) {
 	if err != nil {
 		level = log.WarnLevel // default to warning
 	}
-	StdLogger = StdLogger.WithOptions(log.WithLevel(level))
+	defaultLogger = defaultLogger.WithOptions(log.WithLevel(level))
 }
 
 // wrap log
 
 func Error(format string, v ...interface{}) {
-	StdLogger.Errorf(format, v...)
+	defaultLogger.Errorf(format, v...)
 }
 
 func Warn(format string, v ...interface{}) {
-	StdLogger.Warnf(format, v...)
+	defaultLogger.Warnf(format, v...)
 }
 
 func Info(format string, v ...interface{}) {
-	StdLogger.Infof(format, v...)
+	defaultLogger.Infof(format, v...)
 }
 
 func Debug(format string, v ...interface{}) {
-	StdLogger.Debugf(format, v...)
+	defaultLogger.Debugf(format, v...)
 }
 
 func Trace(format string, v ...interface{}) {
-	StdLogger.Tracef(format, v...)
+	defaultLogger.Tracef(format, v...)
 }
 
 // Logger
@@ -130,21 +130,21 @@ func (pl *PrefixLogger) ClearLogPrefix() {
 }
 
 func (pl *PrefixLogger) Error(format string, v ...interface{}) {
-	StdLogger.Errorf(pl.prefix+format, v...)
+	defaultLogger.Errorf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Warn(format string, v ...interface{}) {
-	StdLogger.Warnf(pl.prefix+format, v...)
+	defaultLogger.Warnf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Info(format string, v ...interface{}) {
-	StdLogger.Infof(pl.prefix+format, v...)
+	defaultLogger.Infof(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Debug(format string, v ...interface{}) {
-	StdLogger.Debugf(pl.prefix+format, v...)
+	defaultLogger.Debugf(pl.prefix+format, v...)
 }
 
 func (pl *PrefixLogger) Trace(format string, v ...interface{}) {
-	StdLogger.Tracef(pl.prefix+format, v...)
+	defaultLogger.Tracef(pl.prefix+format, v...)
 }
