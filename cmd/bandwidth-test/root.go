@@ -79,19 +79,18 @@ func parseWorkerBandwidths(workersStr string) ([]int, error) {
 	return rates, nil
 }
 
-func runBandwidthTest() error {
+func setupTestEnvironment() (string, []int, int, error) {
 	fmt.Println("Starting bandwidth aggregation test...")
 
 	testDir := filepath.Join(tempDir, fmt.Sprintf("fft-bandwidth-test-%d", time.Now().UnixNano()))
 	err := os.MkdirAll(testDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create test directory: %v", err)
+		return "", nil, 0, fmt.Errorf("failed to create test directory: %v", err)
 	}
-	defer os.RemoveAll(testDir)
 
 	workerRates, err := parseWorkerBandwidths(workers)
 	if err != nil {
-		return fmt.Errorf("failed to parse worker configuration: %v", err)
+		return "", nil, 0, fmt.Errorf("failed to parse worker configuration: %v", err)
 	}
 
 	var totalBandwidth int
@@ -99,9 +98,13 @@ func runBandwidthTest() error {
 		totalBandwidth += rate
 	}
 
+	return testDir, workerRates, totalBandwidth, nil
+}
+
+func startServer() (string, *Process, error) {
 	serverPort, err := allocPort()
 	if err != nil {
-		return fmt.Errorf("failed to allocate server port: %v", err)
+		return "", nil, fmt.Errorf("failed to allocate server port: %v", err)
 	}
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", serverPort)
 
@@ -113,9 +116,8 @@ func runBandwidthTest() error {
 	serverProcess := NewProcess("Server", fftsPath, serverArgs, verbose)
 	err = serverProcess.Start()
 	if err != nil {
-		return fmt.Errorf("failed to start server process: %v", err)
+		return "", nil, fmt.Errorf("failed to start server process: %v", err)
 	}
-	defer serverProcess.Stop()
 
 	fmt.Printf("Server started on %s\n", serverAddr)
 	time.Sleep(1 * time.Second)
@@ -126,18 +128,19 @@ func runBandwidthTest() error {
 		}
 	}
 
-	workerProcesses := make([]*Process, 0, len(workerRates))
-	workerAddresses := make([]string, 0, len(workerRates))
+	return serverAddr, serverProcess, nil
+}
 
+func startWorkers(serverAddr string, workerRates []int) ([]*Process, error) {
+	workerProcesses := make([]*Process, 0, len(workerRates))
 	fftwPath := GetExecutablePath("fftw")
 
 	for i, rate := range workerRates {
 		workerPort, err := allocPort()
 		if err != nil {
-			return fmt.Errorf("failed to allocate worker%d port: %v", i+1, err)
+			return nil, fmt.Errorf("failed to allocate worker%d port: %v", i+1, err)
 		}
 		workerAddr := fmt.Sprintf("127.0.0.1:%d", workerPort)
-		workerAddresses = append(workerAddresses, workerAddr)
 
 		workerArgs := []string{
 			"--server-addr", serverAddr,
@@ -150,10 +153,9 @@ func runBandwidthTest() error {
 		workerProcess := NewProcess(workerName, fftwPath, workerArgs, verbose)
 		err = workerProcess.Start()
 		if err != nil {
-			return fmt.Errorf("failed to start worker%d process: %v", i+1, err)
+			return nil, fmt.Errorf("failed to start worker%d process: %v", i+1, err)
 		}
 		workerProcesses = append(workerProcesses, workerProcess)
-		defer workerProcess.Stop()
 
 		fmt.Printf("%s started on %s with bandwidth limit %dKB/s\n", workerName, workerAddr, rate)
 	}
@@ -169,48 +171,42 @@ func runBandwidthTest() error {
 	}
 
 	time.Sleep(2 * time.Second)
+	return workerProcesses, nil
+}
 
-	if fileSize == 0 {
-		expectedSpeed := float64(totalBandwidth) * 1024 * 0.4      // KB/s to bytes/sec with efficiency factor
-		fileSize = int64(expectedSpeed * float64(duration) / 1024) // Convert bytes to KB
+func prepareTestFile(testDir string, totalBandwidth int) (string, string, string, int64, error) {
+	calculatedFileSize := fileSize
+	if calculatedFileSize == 0 {
+		expectedSpeed := float64(totalBandwidth) * 1024 * 0.4                // KB/s to bytes/sec with efficiency factor
+		calculatedFileSize = int64(expectedSpeed * float64(duration) / 1024) // Convert bytes to KB
 		fmt.Printf("Auto-calculated file size: %d KB (%.2f MB) for %d seconds test\n",
-			fileSize, float64(fileSize)/1024, duration)
+			calculatedFileSize, float64(calculatedFileSize)/1024, duration)
 		fmt.Printf("Based on total bandwidth of %dKB/s across %d workers\n",
-			totalBandwidth, len(workerRates))
+			totalBandwidth, len(parseWorkerBandwidths(workers)))
 	}
 
-	fileSizeBytes := fileSize * 1024
+	fileSizeBytes := calculatedFileSize * 1024
 
 	testFilePath := filepath.Join(testDir, "test-file")
-	err = createTestFile(testFilePath, fileSizeBytes)
+	err := createTestFile(testFilePath, fileSizeBytes)
 	if err != nil {
-		return fmt.Errorf("failed to create test file: %v", err)
+		return "", "", "", 0, fmt.Errorf("failed to create test file: %v", err)
 	}
 
 	recvDir := filepath.Join(testDir, "recv")
 	err = os.MkdirAll(recvDir, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to create receive directory: %v", err)
+		return "", "", "", 0, fmt.Errorf("failed to create receive directory: %v", err)
 	}
 
 	transferID := fmt.Sprintf("bandwidth-test-%d", time.Now().UnixNano())
+	return testFilePath, recvDir, transferID, fileSizeBytes, nil
+}
 
-	recvBar := pb.New(int(fileSizeBytes))
-	recvBar.ShowSpeed = true
-	recvBar.SetUnits(pb.U_BYTES)
-	recvBar.Start()
-
-	// We don't need the callback function anymore since we're using external processes
-	// Progress will be tracked by the external processes
-
-	fmt.Println("Starting file transfer...")
-	startTime := time.Now()
-
-	var totalBytes int64
-
+func startSender(serverAddr, transferID, testFilePath string) (*Process, chan error, *pb.ProgressBar, error) {
 	finfo, err := os.Stat(testFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to stat test file: %v", err)
+		return nil, nil, nil, fmt.Errorf("failed to stat test file: %v", err)
 	}
 
 	bar := pb.New(int(finfo.Size()))
@@ -218,14 +214,7 @@ func runBandwidthTest() error {
 	bar.SetUnits(pb.U_BYTES)
 	bar.Start()
 
-	// We don't need the callback function anymore since we're using external processes
-	// Progress will be tracked by the external processes
-
 	senderDoneCh := make(chan error, 1)
-	receiverDoneCh := make(chan error, 1)
-
-	fmt.Println("Starting sender...")
-
 	fftPath := GetExecutablePath("fft")
 	senderArgs := []string{
 		"--server-addr", serverAddr,
@@ -240,6 +229,7 @@ func runBandwidthTest() error {
 	}
 
 	senderProcess := NewProcess("Sender", fftPath, senderArgs, verbose)
+	fmt.Println("Starting sender...")
 
 	go func() {
 		err := senderProcess.Start()
@@ -260,14 +250,20 @@ func runBandwidthTest() error {
 		}
 
 		bar.Finish()
-
 		senderDoneCh <- nil
 	}()
 
-	time.Sleep(2 * time.Second)
+	return senderProcess, senderDoneCh, bar, nil
+}
 
-	fmt.Println("Starting receiver...")
+func startReceiver(serverAddr, transferID, recvDir string, fileSizeBytes int64) (*Process, chan error, *pb.ProgressBar, time.Time, error) {
+	recvBar := pb.New(int(fileSizeBytes))
+	recvBar.ShowSpeed = true
+	recvBar.SetUnits(pb.U_BYTES)
+	recvBar.Start()
 
+	receiverDoneCh := make(chan error, 1)
+	fftPath := GetExecutablePath("fft")
 	receiverArgs := []string{
 		"--server-addr", serverAddr,
 		"--id", transferID,
@@ -280,6 +276,9 @@ func runBandwidthTest() error {
 	}
 
 	receiverProcess := NewProcess("Receiver", fftPath, receiverArgs, verbose)
+	fmt.Println("Starting receiver...")
+
+	startTime := time.Now()
 
 	go func() {
 		err := receiverProcess.Start()
@@ -300,35 +299,23 @@ func runBandwidthTest() error {
 		}
 
 		recvBar.Finish()
-
 		receiverDoneCh <- nil
 	}()
 
-	senderErr := <-senderDoneCh
-	if senderErr != nil {
-		return fmt.Errorf("sender error: %v", senderErr)
-	}
+	return receiverProcess, receiverDoneCh, recvBar, startTime, nil
+}
 
-	select {
-	case receiverErr := <-receiverDoneCh:
-		if receiverErr != nil {
-			return fmt.Errorf("receiver error: %v", receiverErr)
-		}
-	case <-time.After(5 * time.Second):
-		fmt.Println("Receiver timeout - this is expected as sender has completed")
-	}
-
-	bar.Finish()
+func displayResults(testFilePath, recvDir string, startTime time.Time, totalBandwidth int, workerRates []int) error {
+	endTime := time.Now()
+	duration := endTime.Sub(startTime)
 
 	receivedFilePath := filepath.Join(recvDir, filepath.Base(testFilePath))
 	receivedInfo, err := os.Stat(receivedFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to stat received file: %v", err)
 	}
-	totalBytes = receivedInfo.Size()
+	totalBytes := receivedInfo.Size()
 
-	endTime := time.Now()
-	duration := endTime.Sub(startTime)
 	bytesPerSecond := float64(totalBytes) / duration.Seconds()
 	kbPerSecond := bytesPerSecond / 1024
 
@@ -350,8 +337,66 @@ func runBandwidthTest() error {
 	fmt.Printf("Efficiency: %.2f%%\n", (kbPerSecond/float64(totalBandwidth))*100)
 
 	fmt.Println("File transfer completed successfully!")
-
 	return nil
+}
+
+func runBandwidthTest() error {
+	testDir, workerRates, totalBandwidth, err := setupTestEnvironment()
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(testDir)
+
+	serverAddr, serverProcess, err := startServer()
+	if err != nil {
+		return err
+	}
+	defer serverProcess.Stop()
+
+	workerProcesses, err := startWorkers(serverAddr, workerRates)
+	if err != nil {
+		return err
+	}
+	for _, process := range workerProcesses {
+		defer process.Stop()
+	}
+
+	testFilePath, recvDir, transferID, fileSizeBytes, err := prepareTestFile(testDir, totalBandwidth)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Starting file transfer...")
+
+	_, senderDoneCh, bar, err := startSender(serverAddr, transferID, testFilePath)
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(2 * time.Second)
+
+	_, receiverDoneCh, _, startTime, err := startReceiver(serverAddr, transferID, recvDir, fileSizeBytes)
+	if err != nil {
+		return err
+	}
+
+	senderErr := <-senderDoneCh
+	if senderErr != nil {
+		return fmt.Errorf("sender error: %v", senderErr)
+	}
+
+	select {
+	case receiverErr := <-receiverDoneCh:
+		if receiverErr != nil {
+			return fmt.Errorf("receiver error: %v", receiverErr)
+		}
+	case <-time.After(5 * time.Second):
+		fmt.Println("Receiver timeout - this is expected as sender has completed")
+	}
+
+	bar.Finish()
+
+	return displayResults(testFilePath, recvDir, startTime, totalBandwidth, workerRates)
 }
 
 func allocPort() (int, error) {
