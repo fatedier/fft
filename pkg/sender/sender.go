@@ -63,22 +63,22 @@ func NewSender(id uint32, src io.Reader, frameSize int, maxBufferCount int) (*Se
 	}
 
 	s := &Sender{
-		id:                     id,
-		frameSize:              frameSize,
-		src:                    src,
-		frameCh:                make(chan *SendFrame),
-		ackCh:                  make(chan *stream.Ack),
+		id:                       id,
+		frameSize:                frameSize,
+		src:                      src,
+		frameCh:                  make(chan *SendFrame),
+		ackCh:                    make(chan *stream.Ack),
 		dynamicAllocationEnabled: false,
-		transfers:              make(map[int]*Transfer),
-		totalThroughput:        0,
-		allocationRatios:       make(map[int]float64),
-		maxBufferCount:         maxBufferCount,
-		retryFrames:            make([]*SendFrame, 0),
-		limiter:                make(chan struct{}, maxBufferCount),
-		waitAcks:               make(map[uint32]*SendFrame),
-		bufferFrames:           make([]*SendFrame, 0),
-		sendShutdown:           shutdown.New(),
-		ackShutdown:            shutdown.New(),
+		transfers:                make(map[int]*Transfer),
+		totalThroughput:          0,
+		allocationRatios:         make(map[int]float64),
+		maxBufferCount:           maxBufferCount,
+		retryFrames:              make([]*SendFrame, 0),
+		limiter:                  make(chan struct{}, maxBufferCount),
+		waitAcks:                 make(map[uint32]*SendFrame),
+		bufferFrames:             make([]*SendFrame, 0),
+		sendShutdown:             shutdown.New(),
+		ackShutdown:              shutdown.New(),
 	}
 	for i := 0; i < maxBufferCount; i++ {
 		s.limiter <- struct{}{}
@@ -89,7 +89,7 @@ func NewSender(id uint32, src io.Reader, frameSize int, maxBufferCount int) (*Se
 func (sender *Sender) EnableDynamicAllocation() {
 	sender.transfersMu.Lock()
 	defer sender.transfersMu.Unlock()
-	
+
 	sender.dynamicAllocationEnabled = true
 }
 
@@ -108,7 +108,7 @@ func (sender *Sender) HandleStream(s *stream.FrameStream) {
 		trBufferCount = 1
 	}
 	tr := NewTransfer(int(id), trBufferCount, s, sender.frameCh, sender.ackCh)
-	
+
 	if sender.dynamicAllocationEnabled {
 		sender.transfersMu.Lock()
 		sender.transfers[int(id)] = tr
@@ -124,14 +124,14 @@ func (sender *Sender) HandleStream(s *stream.FrameStream) {
 
 	// block until transfer exit
 	noAckFrames := tr.Run()
-	
+
 	if sender.dynamicAllocationEnabled {
 		sender.transfersMu.Lock()
 		delete(sender.transfers, int(id))
 		delete(sender.allocationRatios, int(id))
 		sender.transfersMu.Unlock()
 	}
-	
+
 	if len(noAckFrames) > 0 {
 		sender.mu.Lock()
 		sender.retryFrames = append(sender.retryFrames, noAckFrames...)
@@ -153,14 +153,14 @@ func (sender *Sender) Run() {
 func (sender *Sender) updateAllocationRatios() {
 	sender.transfersMu.RLock()
 	defer sender.transfersMu.RUnlock()
-	
+
 	if len(sender.transfers) <= 1 {
 		for id := range sender.transfers {
 			sender.allocationRatios[id] = 1.0
 		}
 		return
 	}
-	
+
 	// Calculate total throughput across all transfers
 	totalThroughput := 0.0
 	for _, transfer := range sender.transfers {
@@ -170,7 +170,7 @@ func (sender *Sender) updateAllocationRatios() {
 			totalThroughput += 1.0
 		}
 	}
-	
+
 	if totalThroughput > 0 {
 		for id, transfer := range sender.transfers {
 			throughput := transfer.currentThroughput
@@ -241,24 +241,37 @@ func (sender *Sender) loopSend() {
 		sender.mu.Lock()
 		sender.waitAcks[sf.FrameID()] = sf
 		sender.bufferFrames = append(sender.bufferFrames, sf)
-		
+
 		if sender.dynamicAllocationEnabled {
 			if count%10 == 0 {
 				sender.updateAllocationRatios()
 			}
-			
+
 			if len(sender.transfers) > 1 {
-				var fastestWorkerID int
-				maxThroughput := float64(0)
-				
-				for id, transfer := range sender.transfers {
+				var maxThroughput, minThroughput float64
+				maxThroughput = 0
+				minThroughput = float64(^uint(0) >> 1) // Max int value
+
+				for _, transfer := range sender.transfers {
 					if transfer.currentThroughput > maxThroughput {
 						maxThroughput = transfer.currentThroughput
-						fastestWorkerID = id
+					}
+					if transfer.currentThroughput > 0 && transfer.currentThroughput < minThroughput {
+						minThroughput = transfer.currentThroughput
 					}
 				}
-				
-				if maxThroughput > 0 {
+
+				if minThroughput == float64(^uint(0)>>1) || maxThroughput == 0 ||
+					maxThroughput/minThroughput < 1.5 {
+					sf.SetTransferID(-1)
+				} else {
+					var fastestWorkerID int
+					for id, transfer := range sender.transfers {
+						if transfer.currentThroughput == maxThroughput {
+							fastestWorkerID = id
+							break
+						}
+					}
 					sf.SetTransferID(fastestWorkerID)
 				}
 			}

@@ -85,14 +85,14 @@ func (svc *Service) recvFile(id string, filePath string) error {
 	}
 
 	recv := receiver.NewReceiver(0, fio.NewCallbackWriter(f, callback))
-	
+
 	if svc.enableUnorderedProcessing {
 		if svc.debugMode {
 			fmt.Printf("Enabling unordered frame processing with buffer size: %d\n", svc.bufferSize)
 		}
 		recv.EnableUnorderedProcessing(svc.bufferSize)
 	}
-	
+
 	for _, worker := range m.Workers {
 		wait.Add(1)
 		go func(addr string) {

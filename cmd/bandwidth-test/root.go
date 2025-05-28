@@ -17,15 +17,15 @@ import (
 )
 
 var (
-	showVersion             bool
-	fileSize                int64
-	duration                int
-	tempDir                 string
-	workers                 string
-	verbose                 bool // Whether to show detailed output from external processes
+	showVersion               bool
+	fileSize                  int64
+	duration                  int
+	tempDir                   string
+	workers                   string
+	verbose                   bool // Whether to show detailed output from external processes
 	enableUnorderedProcessing bool // Enable out-of-order frame processing
-	dynamicAllocation       bool // Enable dynamic frame allocation
-	bufferSize              int  // Maximum buffer size for out-of-order frames
+	dynamicAllocation         bool // Enable dynamic frame allocation
+	bufferSize                int  // Maximum buffer size for out-of-order frames
 )
 
 func init() {
@@ -35,7 +35,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp-dir", "t", os.TempDir(), "directory to store temporary files")
 	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits (e.g., '200KB' for one worker, '200KB,200KB,300KB' for three workers)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "", false, "show detailed output from external processes")
-	
+
 	rootCmd.PersistentFlags().BoolVar(&enableUnorderedProcessing, "enable-unordered-processing", false, "enable out-of-order frame processing to improve efficiency with unbalanced workers")
 	rootCmd.PersistentFlags().BoolVar(&dynamicAllocation, "dynamic-allocation", false, "enable dynamic frame allocation based on worker performance")
 	rootCmd.PersistentFlags().IntVar(&bufferSize, "buffer-size", 1000, "maximum buffer size for out-of-order frames (only used with --enable-unordered-processing)")
@@ -235,7 +235,7 @@ func startSender(serverAddr, transferID, testFilePath string) (*Process, chan er
 	if verbose {
 		senderArgs = append(senderArgs, "--debug")
 	}
-	
+
 	if dynamicAllocation {
 		senderArgs = append(senderArgs, "--dynamic-allocation")
 		fmt.Println("Dynamic frame allocation enabled")
@@ -287,7 +287,7 @@ func startReceiver(serverAddr, transferID, recvDir string, fileSizeBytes int64) 
 	if verbose {
 		receiverArgs = append(receiverArgs, "--debug")
 	}
-	
+
 	if enableUnorderedProcessing {
 		receiverArgs = append(receiverArgs, "--enable-unordered-processing")
 		if bufferSize > 0 {

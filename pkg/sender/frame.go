@@ -13,7 +13,7 @@ type SendFrame struct {
 	sendTime   time.Time
 	retryTimes int
 	hasAck     bool
-	transferID int        // ID of the transfer this frame is assigned to
+	transferID int // ID of the transfer this frame is assigned to
 
 	mu sync.Mutex
 }
