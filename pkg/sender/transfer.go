@@ -237,22 +237,23 @@ func (t *Transfer) ackReceiver() {
 						if t.inSlowStart {
 							if isLocalNetwork {
 								newLimit = currentLimit * 3
-								
-								if smoothedRTT > minRTT*1.5 && t.framesSent > 10 {
+
+								if smoothedRTT > time.Duration(float64(minRTT)*1.5) && t.framesSent > 10 {
 									t.inSlowStart = false
 									newLimit = currentLimit * 2
 								}
 							} else if isRemoteNetwork {
 								newLimit = currentLimit * 2
-								
-								if smoothedRTT > minRTT*3 && t.framesSent > 30 {
+
+								if smoothedRTT > time.Duration(float64(minRTT)*3) && t.framesSent > 30 {
 									t.inSlowStart = false
 									newLimit = currentLimit
 								}
 							} else {
 								newLimit = currentLimit * 2
-								
-								if smoothedRTT > minRTT*(2*rttMultiplier) && t.framesSent > 20 {
+
+								multiplier := time.Duration(int64(2 * rttMultiplier))
+								if smoothedRTT > minRTT*multiplier && t.framesSent > 20 {
 									t.inSlowStart = false
 									newLimit = currentLimit
 								}
@@ -266,8 +267,8 @@ func (t *Transfer) ackReceiver() {
 								} else {
 									newLimit = currentLimit + (currentLimit / 10)
 								}
-								
-								if smoothedRTT > minRTT*2 {
+
+								if smoothedRTT > time.Duration(float64(minRTT)*2) {
 									newLimit = currentLimit * 3 / 4
 									if newLimit < 1 {
 										newLimit = 1
@@ -281,8 +282,8 @@ func (t *Transfer) ackReceiver() {
 								} else {
 									newLimit = currentLimit + (currentLimit / 32)
 								}
-								
-								if smoothedRTT > minRTT*2 {
+
+								if smoothedRTT > time.Duration(float64(minRTT)*2) {
 									newLimit = currentLimit / 2
 									if newLimit < 1 {
 										newLimit = 1
@@ -290,12 +291,12 @@ func (t *Transfer) ackReceiver() {
 								}
 							} else {
 								if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + int64(float64(currentLimit) / (8 * rttMultiplier))
+									newLimit = currentLimit + int64(float64(currentLimit)/(8*rttMultiplier))
 								} else {
-									newLimit = currentLimit + int64(float64(currentLimit) / (16 * rttMultiplier))
+									newLimit = currentLimit + int64(float64(currentLimit)/(16*rttMultiplier))
 								}
-								
-								if smoothedRTT > minRTT*3 {
+
+								if smoothedRTT > time.Duration(float64(minRTT)*3) {
 									newLimit = int64(float64(currentLimit) / (2 * rttMultiplier))
 									if newLimit < 1 {
 										newLimit = 1

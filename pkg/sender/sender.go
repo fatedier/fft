@@ -273,7 +273,7 @@ func (sender *Sender) loopSend() {
 				} else if isRemoteNetwork {
 					if rttVar < smoothedRTT/8 && smoothedRTT < minRTT+minRTT/4 {
 						newSize = int(float64(currentSize) * 1.1) // Increase by 10%
-					} else if rttVar > smoothedRTT/4 || smoothedRTT > minRTT*1.5 {
+					} else if rttVar > smoothedRTT/4 || smoothedRTT > time.Duration(float64(minRTT)*1.5) {
 						newSize = int(float64(currentSize) * 0.75) // Decrease by 25%
 					}
 				} else {
@@ -284,7 +284,7 @@ func (sender *Sender) loopSend() {
 						if newSize > sender.maxFrameSize {
 							newSize = sender.maxFrameSize
 						}
-					} else if rttVar > smoothedRTT/2 || smoothedRTT > minRTT*2 {
+					} else if rttVar > smoothedRTT/2 || smoothedRTT > time.Duration(float64(minRTT)*2) {
 						// Network is unstable or congested, decrease frame size
 						newSize = int(float64(currentSize) * (1.0 - 0.25*rttMultiplier))
 
