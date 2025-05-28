@@ -93,6 +93,7 @@ func (svc *Service) sendFile(id string, filePath string) error {
 			fmt.Println("Enabling dynamic frame allocation")
 		}
 		s.EnableDynamicAllocation()
+		s.EnableAdaptiveFrameSizing()
 	}
 
 	for _, worker := range m.Workers {
