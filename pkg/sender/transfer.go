@@ -17,6 +17,12 @@ type Transfer struct {
 	inSlowStart    bool
 	waitAcks       map[uint32]*SendFrame
 
+	framesSent        uint64
+	bytesTransferred  uint64
+	startTime         time.Time
+	lastMetricTime    time.Time
+	currentThroughput float64  // bytes per second
+	
 	s            *stream.FrameStream
 	limiter      *limit.Limiter
 	frameCh      chan *SendFrame
@@ -32,17 +38,23 @@ func NewTransfer(id int, maxBufferCount int, s *stream.FrameStream,
 	if maxBufferCount <= 0 {
 		maxBufferCount = 10
 	}
+	now := time.Now()
 	t := &Transfer{
-		id:             id,
-		maxBufferCount: maxBufferCount,
-		inSlowStart:    true,
-		waitAcks:       make(map[uint32]*SendFrame),
-		s:              s,
-		limiter:        limit.NewLimiter(int64(1)),
-		frameCh:        frameCh,
-		ackCh:          ackCh,
-		sendShutdown:   shutdown.New(),
-		recvShutdown:   shutdown.New(),
+		id:               id,
+		maxBufferCount:   maxBufferCount,
+		inSlowStart:      true,
+		waitAcks:         make(map[uint32]*SendFrame),
+		framesSent:       0,
+		bytesTransferred: 0,
+		startTime:        now,
+		lastMetricTime:   now,
+		currentThroughput: 0,
+		s:                s,
+		limiter:          limit.NewLimiter(int64(1)),
+		frameCh:          frameCh,
+		ackCh:            ackCh,
+		sendShutdown:     shutdown.New(),
+		recvShutdown:     shutdown.New(),
 	}
 	return t
 }
@@ -129,8 +141,25 @@ func (t *Transfer) ackReceiver() {
 		}
 
 		t.mu.Lock()
-		_, ok := t.waitAcks[ack.FrameID]
+		sf, ok := t.waitAcks[ack.FrameID]
 		if ok {
+			t.framesSent++
+			if sf.Frame().Buf != nil {
+				t.bytesTransferred += uint64(len(sf.Frame().Buf))
+			}
+			
+			// Calculate throughput every 10 frames or at least once per second
+			now := time.Now()
+			if t.framesSent%10 == 0 || now.Sub(t.lastMetricTime) > time.Second {
+				elapsedSeconds := now.Sub(t.lastMetricTime).Seconds()
+				if elapsedSeconds > 0 {
+					// Calculate bytes per second
+					t.currentThroughput = float64(t.bytesTransferred) / elapsedSeconds
+					t.lastMetricTime = now
+					t.bytesTransferred = 0
+				}
+			}
+			
 			delete(t.waitAcks, ack.FrameID)
 		}
 		t.mu.Unlock()

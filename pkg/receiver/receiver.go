@@ -16,23 +16,41 @@ type Receiver struct {
 	frames      []*stream.Frame
 	framesIDMap map[uint32]struct{}
 	notifyCh    chan struct{}
+	
+	unorderedEnabled bool
+	orderedBuffer    map[uint32]*stream.Frame  // Buffer for out-of-order frames
+	maxBufferSize    int                       // Maximum number of frames to buffer
 
 	mu sync.RWMutex
 }
 
 func NewReceiver(fileID uint32, dst io.Writer) *Receiver {
 	return &Receiver{
-		fileID:      fileID,
-		nextFrameID: 0,
-		dst:         dst,
-		frames:      make([]*stream.Frame, 0),
-		framesIDMap: make(map[uint32]struct{}),
-		notifyCh:    make(chan struct{}, 1),
+		fileID:          fileID,
+		nextFrameID:     0,
+		dst:             dst,
+		frames:          make([]*stream.Frame, 0),
+		framesIDMap:     make(map[uint32]struct{}),
+		notifyCh:        make(chan struct{}, 1),
+		unorderedEnabled: false,
+		orderedBuffer:   make(map[uint32]*stream.Frame),
+		maxBufferSize:   1000, // Default buffer size
+	}
+}
+
+func (r *Receiver) EnableUnorderedProcessing(maxBufferSize int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	
+	r.unorderedEnabled = true
+	if maxBufferSize > 0 {
+		r.maxBufferSize = maxBufferSize
 	}
 }
 
 func (r *Receiver) RecvFrame(frame *stream.Frame) {
 	r.mu.Lock()
+	
 	if frame.FrameID < r.nextFrameID {
 		r.mu.Unlock()
 		return
@@ -41,6 +59,22 @@ func (r *Receiver) RecvFrame(frame *stream.Frame) {
 	if _, ok := r.framesIDMap[frame.FrameID]; ok {
 		r.mu.Unlock()
 		return
+	}
+
+	if r.unorderedEnabled {
+		if frame.FrameID > r.nextFrameID {
+			if len(r.orderedBuffer) < r.maxBufferSize {
+				r.orderedBuffer[frame.FrameID] = frame
+				r.framesIDMap[frame.FrameID] = struct{}{}
+			}
+			r.mu.Unlock()
+			
+			select {
+			case r.notifyCh <- struct{}{}:
+			default:
+			}
+			return
+		}
 	}
 
 	r.frames = append(r.frames, frame)
@@ -67,6 +101,7 @@ func (r *Receiver) Run() {
 		ii := 0
 		finished := false
 		r.mu.Lock()
+		
 		for i, frame := range r.frames {
 			if r.nextFrameID == frame.FrameID {
 				ii = i + 1
@@ -85,6 +120,27 @@ func (r *Receiver) Run() {
 			}
 		}
 		r.frames = r.frames[ii:]
+		
+		if r.unorderedEnabled {
+			continueProcessing := true
+			for continueProcessing {
+				if frame, ok := r.orderedBuffer[r.nextFrameID]; ok {
+					delete(r.orderedBuffer, r.nextFrameID)
+					delete(r.framesIDMap, r.nextFrameID)
+					
+					// Check if it's the last frame
+					if len(frame.Buf) == 0 {
+						finished = true
+						break
+					}
+					
+					buffer.Write(frame.Buf)
+					r.nextFrameID++
+				} else {
+					continueProcessing = false
+				}
+			}
+		}
 		r.mu.Unlock()
 
 		buf := buffer.Bytes()

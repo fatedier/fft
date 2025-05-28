@@ -32,6 +32,12 @@ type Sender struct {
 	// get each ack message from ackCh
 	ackCh chan *stream.Ack
 
+	dynamicAllocationEnabled bool
+	transfers                map[int]*Transfer
+	totalThroughput          float64
+	allocationRatios         map[int]float64
+	transfersMu              sync.RWMutex
+
 	retryFrames []*SendFrame
 
 	maxBufferCount int
@@ -57,23 +63,34 @@ func NewSender(id uint32, src io.Reader, frameSize int, maxBufferCount int) (*Se
 	}
 
 	s := &Sender{
-		id:             id,
-		frameSize:      frameSize,
-		src:            src,
-		frameCh:        make(chan *SendFrame),
-		ackCh:          make(chan *stream.Ack),
-		maxBufferCount: maxBufferCount,
-		retryFrames:    make([]*SendFrame, 0),
-		limiter:        make(chan struct{}, maxBufferCount),
-		waitAcks:       make(map[uint32]*SendFrame),
-		bufferFrames:   make([]*SendFrame, 0),
-		sendShutdown:   shutdown.New(),
-		ackShutdown:    shutdown.New(),
+		id:                     id,
+		frameSize:              frameSize,
+		src:                    src,
+		frameCh:                make(chan *SendFrame),
+		ackCh:                  make(chan *stream.Ack),
+		dynamicAllocationEnabled: false,
+		transfers:              make(map[int]*Transfer),
+		totalThroughput:        0,
+		allocationRatios:       make(map[int]float64),
+		maxBufferCount:         maxBufferCount,
+		retryFrames:            make([]*SendFrame, 0),
+		limiter:                make(chan struct{}, maxBufferCount),
+		waitAcks:               make(map[uint32]*SendFrame),
+		bufferFrames:           make([]*SendFrame, 0),
+		sendShutdown:           shutdown.New(),
+		ackShutdown:            shutdown.New(),
 	}
 	for i := 0; i < maxBufferCount; i++ {
 		s.limiter <- struct{}{}
 	}
 	return s, nil
+}
+
+func (sender *Sender) EnableDynamicAllocation() {
+	sender.transfersMu.Lock()
+	defer sender.transfersMu.Unlock()
+	
+	sender.dynamicAllocationEnabled = true
 }
 
 func (sender *Sender) HandleStream(s *stream.FrameStream) {
@@ -91,9 +108,30 @@ func (sender *Sender) HandleStream(s *stream.FrameStream) {
 		trBufferCount = 1
 	}
 	tr := NewTransfer(int(id), trBufferCount, s, sender.frameCh, sender.ackCh)
+	
+	if sender.dynamicAllocationEnabled {
+		sender.transfersMu.Lock()
+		sender.transfers[int(id)] = tr
+		totalTransfers := len(sender.transfers)
+		if totalTransfers > 0 {
+			equalRatio := 1.0 / float64(totalTransfers)
+			for transferID := range sender.transfers {
+				sender.allocationRatios[transferID] = equalRatio
+			}
+		}
+		sender.transfersMu.Unlock()
+	}
 
 	// block until transfer exit
 	noAckFrames := tr.Run()
+	
+	if sender.dynamicAllocationEnabled {
+		sender.transfersMu.Lock()
+		delete(sender.transfers, int(id))
+		delete(sender.allocationRatios, int(id))
+		sender.transfersMu.Unlock()
+	}
+	
 	if len(noAckFrames) > 0 {
 		sender.mu.Lock()
 		sender.retryFrames = append(sender.retryFrames, noAckFrames...)
@@ -110,6 +148,43 @@ func (sender *Sender) Run() {
 
 	sender.sendShutdown.WaitDone()
 	sender.ackShutdown.WaitDone()
+}
+
+func (sender *Sender) updateAllocationRatios() {
+	sender.transfersMu.RLock()
+	defer sender.transfersMu.RUnlock()
+	
+	if len(sender.transfers) <= 1 {
+		for id := range sender.transfers {
+			sender.allocationRatios[id] = 1.0
+		}
+		return
+	}
+	
+	// Calculate total throughput across all transfers
+	totalThroughput := 0.0
+	for id, transfer := range sender.transfers {
+		if transfer.currentThroughput > 0 {
+			totalThroughput += transfer.currentThroughput
+		} else {
+			totalThroughput += 1.0
+		}
+	}
+	
+	if totalThroughput > 0 {
+		for id, transfer := range sender.transfers {
+			throughput := transfer.currentThroughput
+			if throughput <= 0 {
+				throughput = 1.0 // Default value if no data yet
+			}
+			sender.allocationRatios[id] = throughput / totalThroughput
+		}
+	} else {
+		equalRatio := 1.0 / float64(len(sender.transfers))
+		for id := range sender.transfers {
+			sender.allocationRatios[id] = equalRatio
+		}
+	}
 }
 
 func (sender *Sender) loopSend() {
@@ -161,13 +236,18 @@ func (sender *Sender) loopSend() {
 		}
 		buf = buf[:n]
 
-		// send frames to transfers
 		f := stream.NewFrame(0, count, buf)
 		sf := NewSendFrame(f)
 		sender.mu.Lock()
 		sender.waitAcks[sf.FrameID()] = sf
 		sender.bufferFrames = append(sender.bufferFrames, sf)
 		sender.mu.Unlock()
+
+		if sender.dynamicAllocationEnabled {
+			if count%10 == 0 {
+				sender.updateAllocationRatios()
+			}
+		}
 
 		sender.frameCh <- sf
 		count++
