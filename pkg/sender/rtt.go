@@ -187,7 +187,7 @@ func (r *RTTStats) GetAdaptiveRTTMultiplier() float64 {
 	
 	if r.latestRTT < r.smoothedRTT {
 		return baseMultiplier * 0.9
-	} else if r.latestRTT > r.smoothedRTT*1.2 {
+	} else if r.latestRTT > time.Duration(float64(r.smoothedRTT)*1.2) {
 		return baseMultiplier * 1.3
 	}
 	

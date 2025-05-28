@@ -259,33 +259,26 @@ func (t *Transfer) ackReceiver() {
 								}
 							}
 						} else {
-						workerID := int(t.id)
 						isSlowWorker := false
 						isFastWorker := false
 						
-						if len(s.transfers) > 1 && s.totalThroughput > 0 {
-							s.transfersMu.RLock()
-							var maxThroughput, minThroughput float64
-							maxThroughput = 0
-							minThroughput = float64(^uint(0) >> 1) // Max int value
+						if t.framesSent > 20 {
+							// Calculate expected throughput based on RTT
+							expectedThroughput := float64(0)
 							
-							for _, tr := range s.transfers {
-								if tr.currentThroughput > maxThroughput {
-									maxThroughput = tr.currentThroughput
-								}
-								if tr.currentThroughput > 0 && tr.currentThroughput < minThroughput {
-									minThroughput = tr.currentThroughput
-								}
+							if isLocalNetwork {
+								expectedThroughput = 500 * 1024 // 500KB/s as a reference point
+							} else if isRemoteNetwork {
+								expectedThroughput = 200 * 1024 // 200KB/s as a reference point
+							} else {
+								expectedThroughput = 300 * 1024 // 300KB/s as a reference point
 							}
 							
-							if minThroughput != float64(^uint(0)>>1) && maxThroughput > 0 {
-								if t.currentThroughput == minThroughput {
-									isSlowWorker = true
-								} else if t.currentThroughput == maxThroughput {
-									isFastWorker = true
-								}
+							if t.currentThroughput < expectedThroughput*0.5 {
+								isSlowWorker = true
+							} else if t.currentThroughput > expectedThroughput*1.5 {
+								isFastWorker = true
 							}
-							s.transfersMu.RUnlock()
 						}
 						
 						if isLocalNetwork {
@@ -379,7 +372,6 @@ func (t *Transfer) ackReceiver() {
 									newLimit = 1
 								}
 							}
-						}
 						}
 
 						// Cap at maxBufferCount
