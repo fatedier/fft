@@ -151,27 +151,39 @@ func (t *Transfer) frameSender() {
 		t.mu.Unlock()
 
 		if !t.inSlowStart && t.framesSent > 20 {
+			var framesToRetry []*SendFrame
+			
 			t.mu.Lock()
 			now := time.Now()
 			smoothedRTT := t.rttStats.GetSmoothedRTT()
 			rttTimeout := smoothedRTT * 3 // Timeout threshold
-
+			
+			retryCount := 0
+			maxRetryPerCycle := 5
+			
 			for frameID, waitFrame := range t.waitAcks {
-				if frameID != sf.FrameID() && !waitFrame.sendTime.IsZero() {
+				if frameID != sf.FrameID() && !waitFrame.sendTime.IsZero() && waitFrame.retryTimes < 3 {
 					elapsed := now.Sub(waitFrame.sendTime)
 					if elapsed > rttTimeout {
-						waitFrame.retryTimes++
-						waitFrame.UpdateSendTime() // Update send time for retransmission
-
-						err = t.s.WriteFrame(waitFrame.Frame())
-						if err != nil {
-							t.mu.Unlock()
-							return
+						framesToRetry = append(framesToRetry, waitFrame)
+						retryCount++
+						if retryCount >= maxRetryPerCycle {
+							break
 						}
 					}
 				}
 			}
 			t.mu.Unlock()
+			
+			for _, waitFrame := range framesToRetry {
+				waitFrame.retryTimes++
+				waitFrame.UpdateSendTime()
+				
+				err = t.s.WriteFrame(waitFrame.Frame())
+				if err != nil {
+					return
+				}
+			}
 		}
 
 		err = t.s.WriteFrame(sf.Frame())
