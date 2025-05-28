@@ -24,6 +24,10 @@ func init() {
 	rootCmd.PersistentFlags().IntVarP(&options.CacheCount, "cache-count", "c", 512, "how many frames be cached, it will be set to the min value between sender and receiver")
 	rootCmd.PersistentFlags().StringVarP(&options.RecvFile, "recv-file", "t", "", "specify local file path to store received file")
 	rootCmd.PersistentFlags().BoolVarP(&options.DebugMode, "debug", "g", false, "print more debug info")
+	
+	rootCmd.PersistentFlags().BoolVar(&options.EnableUnorderedProcessing, "enable-unordered-processing", false, "enable out-of-order frame processing to improve efficiency with unbalanced workers")
+	rootCmd.PersistentFlags().BoolVar(&options.DynamicAllocation, "dynamic-allocation", false, "enable dynamic frame allocation based on worker performance")
+	rootCmd.PersistentFlags().IntVar(&options.BufferSize, "buffer-size", 1000, "maximum buffer size for out-of-order frames (only used with --enable-unordered-processing)")
 }
 
 var rootCmd = &cobra.Command{
