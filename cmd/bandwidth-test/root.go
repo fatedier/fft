@@ -181,8 +181,9 @@ func prepareTestFile(testDir string, totalBandwidth int) (string, string, string
 		calculatedFileSize = int64(expectedSpeed * float64(duration) / 1024) // Convert bytes to KB
 		fmt.Printf("Auto-calculated file size: %d KB (%.2f MB) for %d seconds test\n",
 			calculatedFileSize, float64(calculatedFileSize)/1024, duration)
+		rates, _ := parseWorkerBandwidths(workers)
 		fmt.Printf("Based on total bandwidth of %dKB/s across %d workers\n",
-			totalBandwidth, len(workerRates))
+			totalBandwidth, len(rates))
 	}
 
 	fileSizeBytes := calculatedFileSize * 1024
