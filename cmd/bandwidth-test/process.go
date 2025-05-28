@@ -99,10 +99,39 @@ func (p *Process) StdOutput() string {
 }
 
 func GetExecutablePath(name string) string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Sprintf("./bin/%s", name)
+	
+	path, err := exec.LookPath(name)
+	if err == nil {
+		return path
 	}
 	
-	return filepath.Join(cwd, "bin", name)
+	execPath, err := os.Executable()
+	if err == nil {
+		execDir := filepath.Dir(execPath)
+		
+		binPath := filepath.Join(execDir, name)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath
+		}
+		
+		binPath = filepath.Join(execDir, "bin", name)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath
+		}
+		
+		binPath = filepath.Join(filepath.Dir(execDir), "bin", name)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath
+		}
+	}
+	
+	cwd, err := os.Getwd()
+	if err == nil {
+		binPath := filepath.Join(cwd, "bin", name)
+		if _, err := os.Stat(binPath); err == nil {
+			return binPath
+		}
+	}
+	
+	return name
 }
