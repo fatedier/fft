@@ -37,7 +37,7 @@ func init() {
 	rootCmd.PersistentFlags().Int64VarP(&fileSize, "file_size", "s", 0, "test file size in bytes, 0 means auto calculate based on duration")
 	rootCmd.PersistentFlags().IntVarP(&duration, "duration", "d", 25, "expected test duration in seconds, used to calculate file size if not specified")
 	rootCmd.PersistentFlags().StringVarP(&tempDir, "temp_dir", "t", os.TempDir(), "directory to store temporary files")
-	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits (e.g., '200KB' for one worker, '200KB,200KB,300KB' for three workers)")
+	rootCmd.PersistentFlags().StringVarP(&workers, "workers", "w", "100KB,500KB", "worker bandwidth configuration, comma-separated list of bandwidth limits with optional units (KB, MB, GB). Examples: '200KB', '1MB', '200KB,1MB,500KB'. If no unit specified, KB is assumed.")
 }
 
 var rootCmd = &cobra.Command{
@@ -64,9 +64,7 @@ func parseWorkerBandwidths(workersStr string) ([]int, error) {
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 
-		part = strings.TrimSuffix(part, "KB")
-
-		rate, err := strconv.Atoi(part)
+		rate, err := parseBandwidthWithUnit(part)
 		if err != nil {
 			return nil, fmt.Errorf("invalid bandwidth format '%s': %v", part, err)
 		}
@@ -83,6 +81,32 @@ func parseWorkerBandwidths(workersStr string) ([]int, error) {
 	}
 
 	return rates, nil
+}
+
+func parseBandwidthWithUnit(input string) (int, error) {
+	input = strings.TrimSpace(input)
+
+	multiplier := 1
+	lowerInput := strings.ToLower(input)
+
+	if strings.HasSuffix(lowerInput, "gb") {
+		multiplier = 1024 * 1024 // GB to KB
+		input = input[:len(input)-2]
+	} else if strings.HasSuffix(lowerInput, "mb") {
+		multiplier = 1024 // MB to KB
+		input = input[:len(input)-2]
+	} else if strings.HasSuffix(lowerInput, "kb") {
+		multiplier = 1 // KB to KB
+		input = input[:len(input)-2]
+	}
+
+	input = strings.TrimSpace(input)
+	value, err := strconv.Atoi(input)
+	if err != nil {
+		return 0, err
+	}
+
+	return value * multiplier, nil
 }
 
 func runBandwidthTest() error {
