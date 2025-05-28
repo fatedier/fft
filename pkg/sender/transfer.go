@@ -259,7 +259,53 @@ func (t *Transfer) ackReceiver() {
 								}
 							}
 						} else {
-							if isLocalNetwork {
+						workerID := int(t.id)
+						isSlowWorker := false
+						isFastWorker := false
+						
+						if len(s.transfers) > 1 && s.totalThroughput > 0 {
+							s.transfersMu.RLock()
+							var maxThroughput, minThroughput float64
+							maxThroughput = 0
+							minThroughput = float64(^uint(0) >> 1) // Max int value
+							
+							for _, tr := range s.transfers {
+								if tr.currentThroughput > maxThroughput {
+									maxThroughput = tr.currentThroughput
+								}
+								if tr.currentThroughput > 0 && tr.currentThroughput < minThroughput {
+									minThroughput = tr.currentThroughput
+								}
+							}
+							
+							if minThroughput != float64(^uint(0)>>1) && maxThroughput > 0 {
+								if t.currentThroughput == minThroughput {
+									isSlowWorker = true
+								} else if t.currentThroughput == maxThroughput {
+									isFastWorker = true
+								}
+							}
+							s.transfersMu.RUnlock()
+						}
+						
+						if isLocalNetwork {
+							if isSlowWorker {
+								if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + (currentLimit / 2)
+								} else if rttVar < smoothedRTT/2 {
+									newLimit = currentLimit + (currentLimit / 3)
+								} else {
+									newLimit = currentLimit + (currentLimit / 5)
+								}
+							} else if isFastWorker {
+								if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + (currentLimit / 3)
+								} else if rttVar < smoothedRTT/2 {
+									newLimit = currentLimit + (currentLimit / 5)
+								} else {
+									newLimit = currentLimit + (currentLimit / 8)
+								}
+							} else {
 								if rttVar < smoothedRTT/4 {
 									newLimit = currentLimit + (currentLimit / 4)
 								} else if rttVar < smoothedRTT/2 {
@@ -267,14 +313,28 @@ func (t *Transfer) ackReceiver() {
 								} else {
 									newLimit = currentLimit + (currentLimit / 10)
 								}
+							}
 
-								if smoothedRTT > time.Duration(float64(minRTT)*2) {
+							if smoothedRTT > time.Duration(float64(minRTT)*2) {
+								if isSlowWorker {
+									newLimit = currentLimit * 4 / 5
+								} else {
 									newLimit = currentLimit * 3 / 4
-									if newLimit < 1 {
-										newLimit = 1
-									}
 								}
-							} else if isRemoteNetwork {
+								if newLimit < 1 {
+									newLimit = 1
+								}
+							}
+						} else if isRemoteNetwork {
+							if isSlowWorker {
+								if rttVar < smoothedRTT/8 {
+									newLimit = currentLimit + (currentLimit / 8)
+								} else if rttVar < smoothedRTT/4 {
+									newLimit = currentLimit + (currentLimit / 12)
+								} else {
+									newLimit = currentLimit + (currentLimit / 20)
+								}
+							} else {
 								if rttVar < smoothedRTT/8 {
 									newLimit = currentLimit + (currentLimit / 10)
 								} else if rttVar < smoothedRTT/4 {
@@ -282,27 +342,44 @@ func (t *Transfer) ackReceiver() {
 								} else {
 									newLimit = currentLimit + (currentLimit / 32)
 								}
+							}
 
-								if smoothedRTT > time.Duration(float64(minRTT)*2) {
-									newLimit = currentLimit / 2
-									if newLimit < 1 {
-										newLimit = 1
-									}
-								}
-							} else {
-								if rttVar < smoothedRTT/4 {
-									newLimit = currentLimit + int64(float64(currentLimit)/(8*rttMultiplier))
+							if smoothedRTT > time.Duration(float64(minRTT)*2) {
+								if isSlowWorker {
+									newLimit = currentLimit * 3 / 5
 								} else {
-									newLimit = currentLimit + int64(float64(currentLimit)/(16*rttMultiplier))
+									newLimit = currentLimit / 2
 								}
-
-								if smoothedRTT > time.Duration(float64(minRTT)*3) {
-									newLimit = int64(float64(currentLimit) / (2 * rttMultiplier))
-									if newLimit < 1 {
-										newLimit = 1
-									}
+								if newLimit < 1 {
+									newLimit = 1
 								}
 							}
+						} else {
+							rttMultiplier := t.rttStats.GetAdaptiveRTTMultiplier()
+							
+							if isSlowWorker {
+								rttMultiplier *= 0.8
+							} else if isFastWorker {
+								rttMultiplier *= 1.2
+							}
+							
+							if rttVar < smoothedRTT/4 {
+								newLimit = currentLimit + int64(float64(currentLimit)/(6*rttMultiplier))
+							} else {
+								newLimit = currentLimit + int64(float64(currentLimit)/(12*rttMultiplier))
+							}
+
+							if smoothedRTT > time.Duration(float64(minRTT)*3) {
+								backoffFactor := 2.0 * rttMultiplier
+								if isSlowWorker {
+									backoffFactor *= 0.8 // Less aggressive backoff for slow workers
+								}
+								newLimit = int64(float64(currentLimit) / backoffFactor)
+								if newLimit < 1 {
+									newLimit = 1
+								}
+							}
+						}
 						}
 
 						// Cap at maxBufferCount

@@ -86,7 +86,15 @@ func (r *RTTStats) detectNetworkEnvironment() {
 		r.networkEnvironment = NetworkEnvironmentRemote
 	} else {
 		if r.minRTT <= RTTThresholds.LocalThreshold*2 {
-			r.networkEnvironment = NetworkEnvironmentLocal
+			if r.rttVar < r.smoothedRTT/4 {
+				r.networkEnvironment = NetworkEnvironmentLocal
+			} else {
+				if r.latestRTT < r.smoothedRTT {
+					r.networkEnvironment = NetworkEnvironmentLocal
+				} else {
+					r.networkEnvironment = NetworkEnvironmentRemote
+				}
+			}
 		} else {
 			r.networkEnvironment = NetworkEnvironmentRemote
 		}
@@ -153,13 +161,35 @@ func (r *RTTStats) IsRemoteNetwork() bool {
 func (r *RTTStats) GetAdaptiveRTTMultiplier() float64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
+	
+	// Base multiplier based on network environment
+	var baseMultiplier float64
 	switch r.networkEnvironment {
 	case NetworkEnvironmentLocal:
-		return 0.5 // More aggressive for local networks
+		baseMultiplier = 0.5 // More aggressive for local networks
 	case NetworkEnvironmentRemote:
-		return 2.0 // More conservative for remote networks
+		baseMultiplier = 2.0 // More conservative for remote networks
 	default:
-		return 1.0 // Default multiplier
+		baseMultiplier = 1.0 // Default multiplier
 	}
+	
+	if r.samples < 10 {
+		return baseMultiplier // Not enough samples to make adjustments
+	}
+	
+	stabilityRatio := float64(r.rttVar) / float64(r.smoothedRTT)
+	
+	if stabilityRatio < 0.1 {
+		return baseMultiplier * 0.8
+	} else if stabilityRatio > 0.3 {
+		return baseMultiplier * 1.5
+	}
+	
+	if r.latestRTT < r.smoothedRTT {
+		return baseMultiplier * 0.9
+	} else if r.latestRTT > r.smoothedRTT*1.2 {
+		return baseMultiplier * 1.3
+	}
+	
+	return baseMultiplier
 }
