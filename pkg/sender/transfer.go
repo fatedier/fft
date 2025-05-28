@@ -56,6 +56,8 @@ func NewTransfer(id int, maxBufferCount int, s *stream.FrameStream,
 		sendShutdown:     shutdown.New(),
 		recvShutdown:     shutdown.New(),
 	}
+	
+	t.limiter.SetLimit(int64(1))
 	return t
 }
 
@@ -155,6 +157,25 @@ func (t *Transfer) ackReceiver() {
 				if elapsedSeconds > 0 {
 					// Calculate bytes per second
 					t.currentThroughput = float64(t.bytesTransferred) / elapsedSeconds
+					
+					currentLimit := t.limiter.GetLimit()
+					if t.currentThroughput > 0 {
+						newLimit := currentLimit
+						if t.inSlowStart {
+							newLimit = currentLimit * 2
+						} else {
+							newLimit = currentLimit + (currentLimit / 10)
+						}
+						
+						// Cap at maxBufferCount
+						if newLimit > int64(t.maxBufferCount) {
+							newLimit = int64(t.maxBufferCount)
+							t.inSlowStart = false
+						}
+						
+						t.limiter.SetLimit(newLimit)
+					}
+					
 					t.lastMetricTime = now
 					t.bytesTransferred = 0
 				}
