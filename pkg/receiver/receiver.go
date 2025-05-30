@@ -142,6 +142,7 @@ func (r *Receiver) Run() {
 		}
 
 		if finished {
+			close(r.notifyCh)
 			break
 		}
 	}
