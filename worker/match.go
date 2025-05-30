@@ -101,7 +101,7 @@ func (mc *MatchController) DealTransferConn(tc *TransferConn, timeout time.Durat
 	} else {
 		retryDelay := 100 * time.Millisecond
 		maxRetries := 3
-		
+
 		for i := 0; i < maxRetries; i++ {
 			select {
 			case pairConn.pairConnCh <- tc:
