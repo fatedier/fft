@@ -99,12 +99,19 @@ func (mc *MatchController) DealTransferConn(tc *TransferConn, timeout time.Durat
 			return fmt.Errorf("timeout waiting pair connection")
 		}
 	} else {
-		select {
-		case pairConn.pairConnCh <- tc:
-		case <-time.After(5 * time.Second):
-			return fmt.Errorf("timeout sending to pair connection channel")
-		default:
-			return fmt.Errorf("no target pair connection")
+		retryDelay := 100 * time.Millisecond
+		maxRetries := 3
+		
+		for i := 0; i < maxRetries; i++ {
+			select {
+			case pairConn.pairConnCh <- tc:
+				return nil
+			case <-time.After(retryDelay):
+				retryDelay *= 2
+				if i == maxRetries-1 {
+					return fmt.Errorf("timeout sending to pair connection channel after %d retries", maxRetries)
+				}
+			}
 		}
 	}
 	return nil

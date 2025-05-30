@@ -211,10 +211,10 @@ func prepareTestFile(testDir string, totalBandwidth int) (string, string, string
 	return testFilePath, recvDir, transferID, fileSizeBytes, nil
 }
 
-func startSender(serverAddr, transferID, testFilePath string) (*Process, chan error, *pb.ProgressBar, error) {
+func startSender(serverAddr, transferID, testFilePath string) (*Process, chan error, chan struct{}, *pb.ProgressBar, error) {
 	finfo, err := os.Stat(testFilePath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to stat test file: %v", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to stat test file: %v", err)
 	}
 
 	bar := pb.New(int(finfo.Size()))
@@ -222,6 +222,7 @@ func startSender(serverAddr, transferID, testFilePath string) (*Process, chan er
 	bar.SetUnits(pb.U_BYTES)
 	bar.Start()
 
+	senderReadyCh := make(chan struct{})
 	senderDoneCh := make(chan error, 1)
 	fftPath := GetExecutablePath("fft")
 	senderArgs := []string{
@@ -251,6 +252,9 @@ func startSender(serverAddr, transferID, testFilePath string) (*Process, chan er
 			return
 		}
 
+		time.Sleep(3 * time.Second)
+		close(senderReadyCh)
+
 		err = senderProcess.cmd.Wait()
 		if err != nil {
 			senderDoneCh <- fmt.Errorf("sender process error: %v", err)
@@ -266,7 +270,7 @@ func startSender(serverAddr, transferID, testFilePath string) (*Process, chan er
 		senderDoneCh <- nil
 	}()
 
-	return senderProcess, senderDoneCh, bar, nil
+	return senderProcess, senderDoneCh, senderReadyCh, bar, nil
 }
 
 func startReceiver(serverAddr, transferID, recvDir string, fileSizeBytes int64) (*Process, chan error, *pb.ProgressBar, time.Time, error) {
@@ -389,12 +393,12 @@ func runBandwidthTest() error {
 
 	fmt.Println("Starting file transfer...")
 
-	_, senderDoneCh, bar, err := startSender(serverAddr, transferID, testFilePath)
+	_, senderDoneCh, senderReadyCh, bar, err := startSender(serverAddr, transferID, testFilePath)
 	if err != nil {
 		return err
 	}
 
-	time.Sleep(2 * time.Second)
+	<-senderReadyCh
 
 	_, receiverDoneCh, _, startTime, err := startReceiver(serverAddr, transferID, recvDir, fileSizeBytes)
 	if err != nil {
