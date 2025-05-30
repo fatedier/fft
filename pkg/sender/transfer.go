@@ -115,18 +115,17 @@ func (t *Transfer) frameSender() {
 			t.limiter.SetLimit(int64(n))
 		}
 
-		sf, ok := <-t.frameCh
-		if !ok {
-			t.s.Close()
-			return
+		select {
+		case sf, ok := <-t.frameCh:
+			if !ok {
+				t.s.Close()
+				return
+			}
+		case <-time.After(5 * time.Second):
+			continue
 		}
 
 		if sf.GetTransferID() != -1 && sf.GetTransferID() != t.id {
-			select {
-			case t.frameCh <- sf:
-			default:
-				sf.SetTransferID(t.id)
-			}
 			continue
 		}
 

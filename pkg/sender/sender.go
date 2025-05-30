@@ -263,7 +263,7 @@ func (sender *Sender) loopSend() {
 
 				if minThroughput == float64(^uint(0)>>1) || maxThroughput == 0 ||
 					maxThroughput/minThroughput < 1.5 {
-					sf.SetTransferID(-1)
+					sf.SetTransferID(-1) // Let any available transfer handle it
 				} else {
 					var fastestWorkerID int
 					for id, transfer := range sender.transfers {
