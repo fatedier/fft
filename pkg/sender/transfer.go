@@ -115,8 +115,11 @@ func (t *Transfer) frameSender() {
 			t.limiter.SetLimit(int64(n))
 		}
 
+		var sf *SendFrame
+		var ok bool
+		
 		select {
-		case sf, ok := <-t.frameCh:
+		case sf, ok = <-t.frameCh:
 			if !ok {
 				t.s.Close()
 				return
