@@ -54,12 +54,15 @@ func NewMatchController(rateByte int, statFunc func(int)) *MatchController {
 
 // block until there is a same ID transfer conn or timeout
 func (mc *MatchController) DealTransferConn(tc *TransferConn, timeout time.Duration) error {
+	log.Debug("DealTransferConn: ID [%s], isSender [%t]", tc.id, tc.isSender)
 	mc.mu.Lock()
 	pairConn, ok := mc.conns[tc.id]
 	if !ok {
 		mc.conns[tc.id] = tc
+		log.Debug("DealTransferConn: stored connection for ID [%s], waiting for pair", tc.id)
 	} else {
 		delete(mc.conns, tc.id)
+		log.Debug("DealTransferConn: found pair for ID [%s], initiating connection", tc.id)
 	}
 	mc.mu.Unlock()
 
@@ -98,6 +101,8 @@ func (mc *MatchController) DealTransferConn(tc *TransferConn, timeout time.Durat
 	} else {
 		select {
 		case pairConn.pairConnCh <- tc:
+		case <-time.After(5 * time.Second):
+			return fmt.Errorf("timeout sending to pair connection channel")
 		default:
 			return fmt.Errorf("no target pair connection")
 		}
