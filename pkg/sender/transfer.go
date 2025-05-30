@@ -117,7 +117,7 @@ func (t *Transfer) frameSender() {
 
 		var sf *SendFrame
 		var ok bool
-		
+
 		select {
 		case sf, ok = <-t.frameCh:
 			if !ok {
